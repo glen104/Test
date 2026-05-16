@@ -2,66 +2,150 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Gemini API Test</title>
+    <title>Gemini CWD Test</title>
     <style>
-        body { background: #06090f; color: white; font-family: monospace; padding: 40px; }
-        #result { margin-top: 20px; padding: 20px; background: #0d1117; border: 1px solid #30363d; border-radius: 8px; white-space: pre-wrap; font-size: 0.9rem; line-height: 1.6; }
+        body { background: #06090f; color: white; font-family: monospace; padding: 40px; max-width: 900px; margin: 0 auto; }
+        h2 { color: #00e5ff; letter-spacing: 2px; text-transform: uppercase; font-size: 1.1rem; margin-bottom: 30px; }
+        .key-box { background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 24px; margin-bottom: 20px; }
+        .key-box label { display: block; font-size: 0.75rem; letter-spacing: 2px; color: #8b949e; margin-bottom: 8px; text-transform: uppercase; }
+        .key-row { display: flex; gap: 10px; }
+        .key-input { flex: 1; background: #161b22; color: white; border: 1px solid #30363d; border-radius: 6px; padding: 10px 14px; font-family: monospace; font-size: 0.9rem; }
+        .key-input:focus { outline: none; border-color: #00e5ff; }
+        button { background: #003087; color: white; border: none; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; white-space: nowrap; }
+        button:hover { background: #0041b8; }
+        button.danger { background: #da3633; }
+        button.danger:hover { background: #b91c1a; }
+        .note { font-size: 0.7rem; color: #586069; margin-top: 8px; line-height: 1.5; }
+        .note.warn { color: #ffca28; }
+        #result { margin-top: 20px; padding: 20px; background: #0d1117; border: 1px solid #30363d; border-radius: 8px; white-space: pre-wrap; font-size: 0.85rem; line-height: 1.6; min-height: 80px; display: none; }
         .ok { color: #00c853; }
         .err { color: #da3633; }
-        button { background: #003087; color: white; border: none; padding: 12px 30px; border-radius: 6px; cursor: pointer; font-size: 1rem; font-weight: bold; }
-        button:hover { background: #0041b8; }
+        .info { color: #00e5ff; }
+        .status-indicator { display: flex; align-items: center; gap: 8px; font-size: 0.7rem; letter-spacing: 2px; text-transform: uppercase; color: #8b949e; margin-bottom: 16px; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: #586069; }
+        .dot.green { background: #00c853; }
+        .dot.red { background: #da3633; }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
     </style>
 </head>
 <body>
-    <h2>Gemini API → NCO CWD Status Test</h2>
-    <button onclick="runTest()">RUN TEST</button>
-    <div id="result">Click RUN TEST to begin...</div>
+
+    <h2>⚡ Gemini API → NCO CWD Status Tester</h2>
+
+    <div class="key-box">
+        <div class="status-indicator">
+            <div class="dot" id="key-dot"></div>
+            <span id="key-status-text">No key loaded</span>
+        </div>
+        <label>Gemini API Key (held in session memory only — cleared when tab closes)</label>
+        <div class="key-row">
+            <input type="password" class="key-input" id="key-input" placeholder="Paste your AIzaSy... key here">
+            <button onclick="saveKey()">USE KEY</button>
+            <button class="danger" onclick="clearKey()">CLEAR</button>
+        </div>
+        <div class="note warn">⚠ Key is never written to disk or sent anywhere except directly to Google's API.</div>
+        <div class="note">Close this tab to erase the key from memory entirely.</div>
+    </div>
+
+    <button onclick="runTest()" style="width:100%; padding:14px; font-size:1rem; margin-bottom:10px;">
+        RUN TEST — Fetch NCO CWD Status
+    </button>
+
+    <div id="result"></div>
 
 <script>
-const GEMINI_KEY = 'AIzaSyB8UUppHh8PoqgZBoJi-xBps4LIgd3_G7I';
+    function saveKey() {
+        const k = document.getElementById('key-input').value.trim();
+        if (!k.startsWith('AIza')) {
+            showResult('err', 'Does not look like a valid Gemini key (should start with AIza...)');
+            return;
+        }
+        sessionStorage.setItem('gemini_key', k);
+        document.getElementById('key-input').value = '';
+        updateKeyStatus();
+    }
 
-async function runTest() {
-    const out = document.getElementById('result');
-    out.innerHTML = 'Fetching...';
+    function clearKey() {
+        sessionStorage.removeItem('gemini_key');
+        document.getElementById('key-input').value = '';
+        updateKeyStatus();
+    }
 
-    try {
-        const resp = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    tools: [{ google_search: {} }],
-                    contents: [{
-                        role: 'user',
-                        parts: [{ text: 'Fetch https://www.nco.ncep.noaa.gov/status/cwd/ and return ONLY a raw JSON object, no markdown: {"status": "NORMAL or Enhanced Caution or Critical Weather Day", "outlookText": "brief outlook narrative", "days": [{"weekday": "Saturday", "date": "May 17", "status": "Normal", "hazards": ["Severe Thunderstorms"]}]}' }]
-                    }]
-                })
-            }
-        );
+    function updateKeyStatus() {
+        const k = sessionStorage.getItem('gemini_key');
+        const dot = document.getElementById('key-dot');
+        const txt = document.getElementById('key-status-text');
+        if (k) {
+            dot.className = 'dot green';
+            txt.innerText = 'Key loaded (' + k.substring(0,8) + '••••••••)';
+        } else {
+            dot.className = 'dot red';
+            txt.innerText = 'No key loaded';
+        }
+    }
 
-        if (!resp.ok) {
-            const err = await resp.json();
-            out.innerHTML = '<span class="err">API ERROR ' + resp.status + ':\n' + JSON.stringify(err, null, 2) + '</span>';
+    function showResult(type, text) {
+        const el = document.getElementById('result');
+        el.style.display = 'block';
+        el.innerHTML = '<span class="' + type + '">' + text + '</span>';
+    }
+
+    async function runTest() {
+        const key = sessionStorage.getItem('gemini_key');
+        if (!key) {
+            showResult('err', 'No key loaded — paste your Gemini key above and click USE KEY first.');
             return;
         }
 
-        const data = await resp.json();
-        const text = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('\n') || '';
-        const clean = text.replace(/```json|```/g, '').trim();
-        const match = clean.match(/\{[\s\S]*\}/);
+        showResult('info', 'Fetching NCO CWD status via Gemini...\n(This may take 5-15 seconds)');
 
-        if (match) {
-            const parsed = JSON.parse(match[0]);
-            out.innerHTML = '<span class="ok">✓ SUCCESS\n\n' + JSON.stringify(parsed, null, 2) + '</span>';
-        } else {
-            out.innerHTML = '<span class="err">Got response but could not parse JSON:\n\n</span>' + text;
+        try {
+            const resp = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        tools: [{ google_search: {} }],
+                        contents: [{
+                            role: 'user',
+                            parts: [{ text: 'Search for the current NCO Critical Weather Day status at https://www.nco.ncep.noaa.gov/status/cwd/ and return ONLY a raw JSON object with no markdown:\n{"status": "NORMAL or Enhanced Caution or Critical Weather Day", "outlookText": "brief outlook narrative text", "days": [{"weekday": "Saturday", "date": "May 17", "status": "Normal or Critical or Enhanced Caution", "hazards": ["Severe Thunderstorms", "Wildfire"]}]}' }]
+                        }]
+                    })
+                }
+            );
+
+            if (!resp.ok) {
+                const err = await resp.json();
+                const msg = err?.error?.message || JSON.stringify(err);
+                showResult('err', 'API ERROR ' + resp.status + ':\n\n' + msg);
+                return;
+            }
+
+            const data = await resp.json();
+            const text = (data.candidates?.[0]?.content?.parts || [])
+                .map(p => p.text || '').join('\n');
+
+            const clean = text.replace(/```json|```/g, '').trim();
+            const match = clean.match(/\{[\s\S]*\}/);
+
+            if (match) {
+                try {
+                    const parsed = JSON.parse(match[0]);
+                    showResult('ok', '✓ SUCCESS\n\n' + JSON.stringify(parsed, null, 2));
+                } catch(pe) {
+                    showResult('err', 'Response received but JSON parse failed:\n\n' + text);
+                }
+            } else {
+                showResult('err', 'Response received but no JSON found. Raw:\n\n' + text);
+            }
+
+        } catch(e) {
+            showResult('err', 'FETCH FAILED:\n' + e.message);
         }
-
-    } catch(e) {
-        out.innerHTML = '<span class="err">FETCH FAILED:\n' + e.message + '</span>';
     }
-}
+
+    updateKeyStatus();
 </script>
 </body>
 </html>
