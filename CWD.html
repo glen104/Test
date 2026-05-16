@@ -101,15 +101,14 @@
 
         try {
             const resp = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${key}`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        tools: [{ google_search: {} }],
                         contents: [{
                             role: 'user',
-                            parts: [{ text: 'Search for the current NCO Critical Weather Day status at https://www.nco.ncep.noaa.gov/status/cwd/ and return ONLY a raw JSON object with no markdown:\n{"status": "NORMAL or Enhanced Caution or Critical Weather Day", "outlookText": "brief outlook narrative text", "days": [{"weekday": "Saturday", "date": "May 17", "status": "Normal or Critical or Enhanced Caution", "hazards": ["Severe Thunderstorms", "Wildfire"]}]}' }]
+                            parts: [{ text: 'Fetch the URL https://www.nco.ncep.noaa.gov/status/cwd/ and parse the CWD status. Return ONLY a raw JSON object with no markdown: {"status": "NORMAL or Enhanced Caution or Critical Weather Day", "outlookText": "brief outlook narrative text", "days": [{"weekday": "Saturday", "date": "May 17", "status": "Normal or Critical or Enhanced Caution", "hazards": ["Severe Thunderstorms", "Wildfire"]}]}' }]
                         }]
                     })
                 }
