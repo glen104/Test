@@ -31,6 +31,7 @@
 <body>
 
     <h2>⚡ Gemini API → NCO CWD Status Tester</h2>
+    <div style="font-size:0.65rem; color:#586069; letter-spacing:2px; margin-bottom:20px;">BUILD: 2026-05-16 21:45:58 UTC</div>
 
     <div class="key-box">
         <div class="status-indicator">
@@ -106,9 +107,10 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
+                        tools: [{ googleSearch: {} }],
                         contents: [{
                             role: 'user',
-                            parts: [{ text: 'Fetch the URL https://www.nco.ncep.noaa.gov/status/cwd/ and parse the CWD status. Return ONLY a raw JSON object with no markdown: {"status": "NORMAL or Enhanced Caution or Critical Weather Day", "outlookText": "brief outlook narrative text", "days": [{"weekday": "Saturday", "date": "May 17", "status": "Normal or Critical or Enhanced Caution", "hazards": ["Severe Thunderstorms", "Wildfire"]}]}' }]
+                            parts: [{ text: 'Go to https://www.nco.ncep.noaa.gov/status/cwd/ right now and read the CURRENT live status. Return ONLY a raw JSON object with no markdown: {"status": "NORMAL or Enhanced Caution or Critical Weather Day", "outlookText": "brief outlook narrative text", "days": [{"weekday": "Saturday", "date": "May 17", "status": "Normal or Critical or Enhanced Caution", "hazards": ["Severe Thunderstorms", "Wildfire"]}]}' }]
                         }]
                     })
                 }
