@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NWC OPS @ A Glance</title>
-    <!-- BUILD: 2026-05-17 17:42 UTC -->
+    <!-- BUILD: 2026-05-17 18:22 UTC>
     <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/60660814?s=280&v=4">
     <style>
         :root {
@@ -107,7 +107,7 @@
 <body onclick="initAudio()">
 
     <div id="progress-container"><div id="progress-bar"></div></div>
-    <div style="position:fixed; top:6px; right:12px; font-size:0.6rem; color:rgba(255,255,255,0.25); letter-spacing:1px; z-index:9999999; pointer-events:none; font-family:monospace;">BUILD: 2026-05-17 17:42 UTC</div>
+    <div style="position:fixed; top:6px; right:12px; font-size:0.6rem; color:rgba(255,255,255,0.25); letter-spacing:1px; z-index:9999999; pointer-events:none; font-family:monospace;">BUILD: 2026-05-17 18:22 UTC</div>
     <div id="modal-overlay" onclick="toggleManager()"></div>
 
     <div id="task-alert-overlay">
@@ -413,13 +413,15 @@
                     var today = new Date();
                     var todayDate = today.getDate();
                     var tomorrowDate = new Date(today.getTime()+86400000).getDate();
-                    var todayDay = (data.days||[]).find(function(d){ return d.date && d.date.split(' ').map(Number).includes(todayDate); });
-                    var tomorrowDay = (data.days||[]).find(function(d){ return d.date && d.date.split(' ').map(Number).includes(tomorrowDate); });
-                    var sig = data.status+'|'+
-                        (todayDay?todayDay.status+todayDay.hazards.join(','):'')+  '|'+
-                        (tomorrowDay?tomorrowDay.status+tomorrowDay.hazards.join(','):'');
+                    // Stable signature from full days content - not time-dependent
+                    var sig = data.status + '|' + (data.days||[]).map(function(d) {
+                        return d.date + ':' + d.status + ':' + (d.hazards||[]).join(',');
+                    }).join('|');
                     var hasValidDays = data.days && data.days.length > 0;
-                    if(lastCWDSignature !== null && sig !== lastCWDSignature && hasValidDays && !cwdAlertsMuted) {
+                    // Always read from localStorage so persists across page loads
+                    var storedSig = null;
+                    try { storedSig = localStorage.getItem('cwd_last_sig'); } catch(e) {}
+                    if(storedSig !== null && sig !== storedSig && hasValidDays && !cwdAlertsMuted) {
                         triggerCWDAlert(data);
                     }
                     lastCWDSignature = sig;
@@ -474,8 +476,10 @@
         function scheduleCWDFetch() {
             var now = new Date();
             var m = now.getMinutes(), s = now.getSeconds();
-            var next = m < 2 ? 2 : m < 32 ? 32 : 62;
-            setTimeout(function(){ fetchCWDStatus(); setInterval(fetchCWDStatus, 1800000); }, ((next-m)*60-s)*1000);
+            // Fire at :02, :12, :22, :32, :42, :52 (2 min after each 10-min action run)
+            var targets = [2, 12, 22, 32, 42, 52, 62];
+            var next = targets.find(function(t){ return t > m; }) || 62;
+            setTimeout(function(){ fetchCWDStatus(); setInterval(fetchCWDStatus, 600000); }, ((next-m)*60-s)*1000);
         }
         scheduleCWDFetch();
 
