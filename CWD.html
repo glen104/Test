@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NWC OPS @ A Glance</title>
+    <!-- BUILD: 2026-05-17 17:06 UTC -->
     <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/60660814?s=280&v=4">
     <style>
         :root {
@@ -21,7 +22,8 @@
         .img-panel { background-size: contain; background-repeat: no-repeat; background-position: center; background-color: #000; }
 
         /* ALERT LAYER */
-        #task-alert-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 30vh; z-index: 9999999; display: none; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(15px); border-bottom: 5px solid rgba(255,255,255,0.5); animation: alert-flash 0.8s infinite; pointer-events: none; }
+        #task-alert-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: auto; min-height: 22vh; padding: 28px 40px; z-index: 9999999; display: none; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(30px) saturate(200%); -webkit-backdrop-filter: blur(30px) saturate(200%); background: rgba(10, 12, 18, 0.25); border-bottom: 1px solid rgba(255,255,255,0.1); border-radius: 0 0 24px 24px; box-shadow: 0 8px 40px rgba(0,0,0,0.5); pointer-events: none; }
+        #task-alert-overlay.cwd-mode { background: transparent; border: none; border-radius: 0; box-shadow: none; min-height: 30vh; animation: alert-flash 0.8s infinite; }
         @keyframes alert-flash { 0% { background-color: rgba(200, 0, 0, 0.5); } 50% { background-color: rgba(255, 0, 0, 0.8); } 100% { background-color: rgba(200, 0, 0, 0.5); } }
         #task-alert-text { font-size: 3.8rem; font-weight: 900; text-transform: uppercase; text-shadow: 0 0 40px black; text-align: center; color: white; padding: 0 20px; }
 
@@ -104,6 +106,7 @@
 <body onclick="initAudio()">
 
     <div id="progress-container"><div id="progress-bar"></div></div>
+    <div style="position:fixed; top:6px; right:12px; font-size:0.6rem; color:rgba(255,255,255,0.25); letter-spacing:1px; z-index:9999999; pointer-events:none; font-family:monospace;">BUILD: 2026-05-17 17:06 UTC</div>
     <div id="modal-overlay" onclick="toggleManager()"></div>
 
     <div id="task-alert-overlay">
@@ -159,6 +162,7 @@
                 <div style="display:flex; gap:10px;">
                     <button class="btn" onclick="fetchCWDStatus()" style="color:#00e5ff; border-color:#00e5ff; font-size:0.9rem; padding:10px 22px;">↻ REFRESH NOW</button>
                     <button class="btn" onclick="testCWDAlert()" style="color:#ffca28; border-color:#ffca28; font-size:0.9rem; padding:10px 22px;">⚠ TEST ALERT</button>
+                    <button class="btn" id="cwd-mute-btn" onclick="toggleCWDMute()" style="color:#8b949e; border-color:#8b949e; font-size:0.9rem; padding:10px 22px;">🔔 ALERTS ON</button>
                 </div>
             </div>
             <div id="cwd-status-panel" style="background:rgba(255,255,255,0.02); border:1px solid #21262d; border-radius:8px; padding:20px; min-height:80px;">
@@ -187,7 +191,8 @@
     </div>
 
     <script>
-        var audioCtx = null, currentIndex = -1, timeLeft = 0, isPaused = false, lastSyncKey = "", firedTasks = {}, isCollapsed = false, cwdData = null;
+        var audioCtx = null, currentIndex = -1, timeLeft = 0, isPaused = false, lastSyncKey = "", firedTasks = {}, isCollapsed = false, cwdData = null, cwdAlertsMuted = false;
+        var lastCWDSignature = localStorage.getItem('cwd_last_sig') || null;
         var STORAGE_KEY = 'ROT_OPS_MASTER';
 
         var defaultSites = [{id:100,name:"Flood Hazard Outlook",url:"https://www.weather.gov/images/owp/FHO/National/National_FHO.png",duration:10,refresh:0,lastSyncSlot:-1,visible:true,locked:true,pendingScheduledSync:false},{id:101,name:"OWP TimeZone",url:"https://glen104.github.io/owp-time-zone/",duration:20,refresh:0,lastSyncSlot:-1,visible:true},{id:102,name:"NWPS Dark",url:"https://water.noaa.gov/#@=-96.401081,38.1465724,4.1722463&b=dark&g=obsFcst,1!1!1!0!0!0!1!0!0!0!1!1!1!0!0!0!0!0!0!0,0.5,1!1!1!1!0,0,0,true&ab=0,0,#D94B4A,1,1,1,#cccccc,1,0,0,#B243B1,1,0,0,#98E09A,1,false&a=hydrologic,0.35,true&s=0,0,0.9,0.9,false&n=false,#72afe9,0.9,0,0.9,0,0.9,true&p=false,0.75,0,7,0,1,2026,5,15,0,true&d=0,0,1,1,1,1,1,1,#006EFF,1,#006EFF,1,#006EFF,false&q=",duration:30,refresh:0,lastSyncSlot:-1,visible:true},{id:103,name:"CONUS RADAR",url:"https://viewer.weather.noaa.gov/general#layers=42909+40090+40091+40801+42887+41709+41708+40658+40674+41707+41352&x=-95.1435&y=40.07899&z=8.5&panel=layer&ts=41352&tst=1778861439",duration:25,refresh:0,lastSyncSlot:-1,visible:true},{id:104,name:"Hawaii RADAR",url:"https://viewer.weather.noaa.gov/general#layers=42909+40090+40091+41709+41708+40658+40674+41707+41360&x=-157.06189&y=20.51151&z=13&panel=layer&ts=41360&tst=1778860019",duration:25,refresh:0,lastSyncSlot:-1,visible:true},{id:105,name:"Alaska RADAR",url:"https://viewer.weather.noaa.gov/general#layers=42909+40090+40091+41709+41708+40658+40674+41707+41356&x=-145.69625&y=63.60013&z=8&panel=layer&ts=41356&tst=1778864335",duration:25,refresh:0,lastSyncSlot:-1,visible:true},{id:106,name:"Puerto Rico RADAR",url:"https://viewer.weather.noaa.gov/general#layers=42909+40090+40091+41709+41708+40658+40674+41707+41364&x=-66.41067&y=18.43518&z=15&panel=layer&ts=41364&tst=1778857495",duration:25,refresh:0,lastSyncSlot:-1,visible:true},{id:107,name:"Guam RADAR",url:"https://viewer.weather.noaa.gov/general#layers=42909+40090+40091+41709+41708+40658+40674+41707+41369&x=145.76855&y=14.43013&z=14.7&panel=layer&ts=41369&tst=1778864698&location=144.77763,13.44356",duration:25,refresh:0,lastSyncSlot:-1,visible:true}];
@@ -246,16 +251,22 @@
         }
 
         function triggerAlert(msg) {
+            var overlay = document.getElementById('task-alert-overlay');
+            overlay.classList.remove('cwd-mode');
             document.getElementById('task-alert-text').innerText = msg;
+            document.getElementById('task-alert-text').style.fontSize = '3.8rem';
             document.getElementById('alert-top-label').innerText = 'OPERATIONAL NOTIFICATION';
+            document.getElementById('alert-top-label').style.color = 'rgba(255,255,255,0.7)';
             document.getElementById('alert-cwd-rows').style.display = 'none';
             document.getElementById('alert-cwd-rows').innerHTML = '';
-            document.getElementById('task-alert-overlay').style.display = 'flex';
+            overlay.style.display = 'flex';
             playSelectedTone();
-            setTimeout(()=>{ document.getElementById('task-alert-overlay').style.display='none'; }, 10000);
+            setTimeout(()=>{ overlay.style.display='none'; }, 10000);
         }
 
         function triggerCWDAlert(data) {
+            var overlay = document.getElementById('task-alert-overlay');
+            overlay.classList.add('cwd-mode');
             var today = new Date();
             var todayDate = today.getDate();
             var tomorrowDate = new Date(today.getTime() + 86400000).getDate();
@@ -270,6 +281,7 @@
             (data.days || []).forEach(function(d) {
                 var s = shortStatus(d.status);
                 var icons = hazardIcons(d.hazards);
+                console.log('Day:', d.date, 'Hazards:', JSON.stringify(d.hazards), 'Icons:', icons);
                 var dayNum = parseInt((d.date || '').split(' ').pop());
                 var label = d.weekday + ' ' + d.date;
                 if(dayNum === todayDate) label = 'TODAY';
@@ -391,19 +403,11 @@
         }, 1000);
 
         // CWD status fetch — every 30 minutes, compare and alert on change
-        var lastCWDSignature = null;
-
         function hazardIcons(hazards) {
             if(!hazards || !hazards.length) return '';
             return hazards.map(function(h) {
-                var u = h.toUpperCase();
-                if(u.includes('SEVERE') || u.includes('THUNDER') || u.includes('LIGHTNING')) return '⚡';
-                if(u.includes('FIRE') || u.includes('WILDFIRE')) return '🔥';
-                if(u.includes('FLOOD') || u.includes('RAIN')) return '🌧';
-                if(u.includes('WINTER') || u.includes('SNOW') || u.includes('ICE')) return '❄';
-                if(u.includes('TROPICAL') || u.includes('HURRICANE')) return '🌀';
-                return '⚠';
-            }).join('');
+                return '<img src="https://www.nco.ncep.noaa.gov/status/css/images/icon-' + h + '.png" style="width:28px; height:28px; vertical-align:middle;" alt="' + h + '">';
+            }).join(' ');
         }
 
         function shortStatus(s) {
@@ -430,11 +434,22 @@
                         (todayDay ? todayDay.status + todayDay.hazards.join(',') : '') + '|' +
                         (tomorrowDay ? tomorrowDay.status + tomorrowDay.hazards.join(',') : '');
 
-                    // If something changed, fire the alert
-                    if(lastCWDSignature !== null && sig !== lastCWDSignature) {
-                        triggerCWDAlert(data);
+                    // Only alert if:
+                    // 1. We have a previous signature to compare against
+                    // 2. The signature actually changed
+                    // 3. The new data has valid days (not an error/empty response)
+                    // 4. The change is meaningful (status or hazards, not just timestamp)
+                    var hasValidDays = data.days && data.days.length > 0;
+                    var hasNonNormalDay = (data.days || []).some(function(d) { return d.status !== 'Normal'; });
+                    
+                    if(lastCWDSignature !== null && sig !== lastCWDSignature && hasValidDays) {
+                        // Only alert when the signature genuinely changed
+                        if(!cwdAlertsMuted) {
+                            triggerCWDAlert(data);
+                        }
                     }
                     lastCWDSignature = sig;
+                    try { localStorage.setItem('cwd_last_sig', sig); } catch(e) {}
                     cwdData = data; // store for test button
                     
                     // Update the CWD panel in settings modal
@@ -458,6 +473,7 @@
             (data.days || []).forEach(function(d) {
                 var color = d.status === 'Normal' ? '#00c853' : d.status.includes('Critical') ? '#da3633' : '#FF9800';
                 var icons = hazardIcons(d.hazards);
+                console.log('Day:', d.date, 'Hazards:', JSON.stringify(d.hazards), 'Icons:', icons);
                 var dayNum = parseInt((d.date || '').split(' ').pop());
                 var dayLabel = d.weekday + ' ' + d.date;
                 if(dayNum === todayDate) dayLabel = 'TODAY · ' + d.date;
@@ -476,8 +492,36 @@
             triggerCWDAlert(cwdData);
         }
 
+        function toggleCWDMute() {
+            cwdAlertsMuted = !cwdAlertsMuted;
+            var btn = document.getElementById('cwd-mute-btn');
+            if(btn) {
+                btn.innerText = cwdAlertsMuted ? '🔕 ALERTS OFF' : '🔔 ALERTS ON';
+                btn.style.color = cwdAlertsMuted ? '#da3633' : '#8b949e';
+                btn.style.borderColor = cwdAlertsMuted ? '#da3633' : '#8b949e';
+            }
+        }
+
+        // Fetch immediately on load, then schedule to run at :02 and :32 past each hour
         fetchCWDStatus();
-        setInterval(fetchCWDStatus, 1800000); // 30 minutes
+
+        function scheduleCWDFetch() {
+            var now = new Date();
+            var minutes = now.getMinutes();
+            var seconds = now.getSeconds();
+            // Find next :02 or :32
+            var nextTarget;
+            if(minutes < 2) nextTarget = 2;
+            else if(minutes < 32) nextTarget = 32;
+            else nextTarget = 62; // wraps to :02 next hour
+            var msUntilNext = ((nextTarget - minutes) * 60 - seconds) * 1000;
+            setTimeout(function() {
+                fetchCWDStatus();
+                // After first hit, run every 30 min
+                setInterval(fetchCWDStatus, 1800000);
+            }, msUntilNext);
+        }
+        scheduleCWDFetch();
 
         syncFrames(); renderLists(); setTimeout(function(){ if(currentIndex===-1) loadSite(0); }, 3000);
     </script>
