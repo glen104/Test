@@ -3,491 +3,528 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NCO CWD Outlook</title>
-    <!-- BUILD: 2026-05-17 17:20 UTC -->
+    <title>NWC OPS @ A Glance</title>
+    <!-- BUILD: 2026-05-17 17:29 UTC>
+    <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/60660814?s=280&v=4">
     <style>
         :root {
-            --bg: #06090f;
-            --panel: #0d1117;
-            --border: #1e2530;
-            --nws-blue: #003087;
-            --cyan: #00e5ff;
-            --normal: #00c853;
-            --caution: #FF9800;
-            --critical: #da3633;
-            --text-dim: #4a5568;
-            --text-mid: #8b949e;
+            --nws-blue: #003087; --z-cyan: #00e5ff; --bg-dark: #06090f;
+            --panel-bg: #0d1117; --border: #30363d; --danger: #da3633;
+            --warning: #ffca28; --success: #238636;
+        }
+        * { box-sizing: border-box; }
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: #000; overflow: hidden; font-family: 'Segoe UI', Arial, sans-serif; color: white; }
+        #progress-container { position: absolute; top: 0; left: 0; width: 100%; height: 5px; background: rgba(255,255,255,0.1); z-index: 1000001; }
+        #progress-bar { height: 100%; width: 0%; background: var(--z-cyan); box-shadow: 0 0 15px var(--z-cyan); transition: width 0.1s linear; }
+        #content-area { width: 100%; height: 100%; position: absolute; top:0; left:0; background: #000; z-index: 1; }
+        .site-panel { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; background-color: #000; opacity: 0; pointer-events: none; transition: opacity 0.4s; z-index: 2; }
+        .site-panel.active { opacity: 1; pointer-events: auto; z-index: 3; }
+        .img-panel { background-size: contain; background-repeat: no-repeat; background-position: center; background-color: #000; }
+
+        /* ALERT LAYER */
+        #task-alert-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: auto; min-height: 22vh; padding: 28px 40px; z-index: 9999999; display: none; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(30px) saturate(200%); -webkit-backdrop-filter: blur(30px) saturate(200%); background: rgba(10, 12, 18, 0.15); border-bottom: 1px solid rgba(255,255,255,0.1); border-radius: 0 0 24px 24px; box-shadow: 0 8px 40px rgba(0,0,0,0.5); pointer-events: none; animation: task-blink 1.2s infinite; }
+        #task-alert-overlay.cwd-mode { background: transparent; border: none; border-radius: 0; box-shadow: none; min-height: 30vh; animation: alert-flash 0.8s infinite; }
+        @keyframes task-blink { 0%,100% { background: rgba(10,12,18,0.15); } 50% { background: rgba(10,12,18,0.35); } }
+        @keyframes alert-flash { 0% { background-color: rgba(200, 0, 0, 0.5); } 50% { background-color: rgba(255, 0, 0, 0.8); } 100% { background-color: rgba(200, 0, 0, 0.5); } }
+        #task-alert-text { font-size: 3.8rem; font-weight: 900; text-transform: uppercase; text-shadow: 0 0 40px black; text-align: center; color: white; padding: 0 20px; }
+
+        /* TOP LABEL - INDEPENDENT & DYNAMIC */
+        #current-label { 
+            position: fixed; top: 40px; left: 50%; transform: translateX(-50%);
+            color: #ffffff; font-weight: 900; text-transform: uppercase; font-size: 1.3rem; 
+            text-align: center; letter-spacing: 3px; z-index: 1000015;
+            text-shadow: 0 0 12px rgba(0,0,0,1), 2px 2px 4px rgba(0,0,0,1);
+            opacity: 0.75; pointer-events: none;
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        body.collapsed-mode #current-label { top: 12px; font-size: 1.1rem; opacity: 0.6; }
+
+        /* CONTROL BAR SLIDER */
+        #hud-slider {
+            position: fixed; bottom: 25px; left: 50%; transform: translateX(-50%); 
+            z-index: 1000005; transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        #hud-slider.collapsed { transform: translate(-50%, 120px); }
+
+        /* HUD BAR - 20% IDLE VISIBILITY */
+        #hud { 
+            background: rgba(13, 17, 23, 0.15); border: 2px solid rgba(0, 229, 255, 0.25);
+            backdrop-filter: none; padding: 12px 30px; border-radius: 40px; 
+            display: flex; gap: 12px; align-items: center; transition: all 0.2s ease-in-out;
+        }
+        #hud:hover { 
+            background: rgba(13, 17, 23, 0.98); backdrop-filter: blur(10px);
+            border: 2px solid var(--z-cyan); box-shadow: 0 10px 50px rgba(0, 229, 255, 0.5);
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        /* GHOSTED CONTROLS */
+        #hud .btn, #hud .icon-btn, #hud .collapse-btn, #hud #heartbeat { 
+            opacity: 0.2; background: transparent; transition: all 0.2s ease;
+        }
+        #hud:hover .btn, #hud:hover .icon-btn, #hud:hover .collapse-btn, #hud:hover #heartbeat { 
+            opacity: 1.0; background: rgba(33, 38, 45, 0.9);
+        }
+        
+        /* NEON RESCUE TAB (FIXED BOTTOM LEFT) */
+        #restore-tab { 
+            position: fixed; bottom: 20px; left: 25px;
+            background: rgba(13, 17, 23, 0.6); border: 2px solid var(--z-cyan); 
+            border-radius: 12px; padding: 8px 20px; 
+            font-size: 0.8rem; font-weight: 900; color: var(--z-cyan); 
+            cursor: pointer; display: none; white-space: nowrap; letter-spacing: 1px;
+            z-index: 1000020; box-shadow: 0 0 15px rgba(0, 229, 255, 0.3);
+            transition: all 0.2s ease;
+        }
+        #restore-tab:hover { background: var(--z-cyan); color: #000; box-shadow: 0 0 25px var(--z-cyan); }
+        body.collapsed-mode #restore-tab { display: block; }
 
-        body {
-            background: var(--bg);
-            color: white;
-            font-family: 'Segoe UI', Arial, sans-serif;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
+        /* UI ELEMENTS */
+        .icon-btn { border: none; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; color: white; padding: 0; background: transparent; }
+        .collapse-btn { border: 1px solid var(--border); width: 34px; height: 34px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1rem; color: white; }
+        .icon-btn:hover, .collapse-btn:hover { background: var(--nws-blue); color: white; }
+        .icon-btn svg { width: 20px; height: 20px; fill: currentColor; }
+        .btn { border: 1px solid var(--border); color: white; padding: 10px 18px; border-radius: 25px; cursor: pointer; font-size: 0.75rem; font-weight: 900; white-space: nowrap; }
+        .btn:hover { background: var(--nws-blue); border-color: white; }
+        #heartbeat { width: 12px; height: 12px; background: var(--success); border-radius: 50%; animation: pulse-green 2s infinite; }
+        @keyframes pulse-green { 0% { box-shadow: 0 0 0 0 rgba(35, 134, 54, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(35, 134, 54, 0); } 100% { box-shadow: 0 0 0 0 rgba(35, 134, 54, 0); } }
 
-        /* ── HEADER ── */
-        .header {
-            background: white;
-            border-bottom: 4px solid var(--nws-blue);
-            padding: 10px 20px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-shrink: 0;
-        }
-        .header-left {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-        }
-        .header-left img { height: 44px; }
-        .header-title {
-            color: var(--nws-blue);
-            font-weight: 900;
-            font-size: 1.5rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            border-left: 5px solid var(--nws-blue);
-            padding-left: 14px;
-            line-height: 1.1;
-        }
-        .header-title span {
-            display: block;
-            font-size: 0.7rem;
-            font-weight: 600;
-            letter-spacing: 3px;
-            color: #586069;
-            margin-top: 2px;
-        }
-        .header-right {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        .sync-badge {
-            font-size: 0.65rem;
-            font-weight: 900;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            color: var(--nws-blue);
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-        .sync-dot {
-            width: 8px; height: 8px;
-            border-radius: 50%;
-            background: #999;
-            flex-shrink: 0;
-        }
-        .sync-dot.live { background: var(--normal); animation: pulse 2s infinite; }
-        .sync-dot.fetching { background: var(--cyan); animation: blink 0.6s infinite; }
-        .sync-dot.error { background: var(--critical); }
-        @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(0,200,83,.6)} 50%{box-shadow:0 0 0 6px rgba(0,200,83,0)} }
-        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
-
-        .updated-text {
-            font-size: 0.65rem;
-            color: #8b949e;
-            letter-spacing: 1px;
-            font-style: italic;
-        }
-
-        /* ── CURRENT STATUS BAR ── */
-        .status-bar {
-            padding: 10px 20px;
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            border-bottom: 1px solid var(--border);
-            flex-shrink: 0;
-            background: #080b10;
-        }
-        .status-label {
-            font-size: 0.75rem;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            color: var(--text-mid);
-        }
-        .status-value {
-            font-size: 1.1rem;
-            font-weight: 900;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-        }
-        .status-value.normal { color: var(--normal); }
-        .status-value.caution { color: var(--caution); }
-        .status-value.critical { color: var(--critical); }
-
-        .outlook-text {
-            font-size: 0.8rem;
-            color: var(--text-mid);
-            font-style: italic;
-            border-left: 2px solid var(--border);
-            padding-left: 12px;
-            line-height: 1.4;
-            flex: 1;
-        }
-
-        /* ── MAIN GRID ── */
-        .main {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            padding: 16px 20px;
-            gap: 12px;
-            overflow: hidden;
-        }
-
-        .section-title {
-            font-size: 0.65rem;
-            font-weight: 800;
-            letter-spacing: 4px;
-            text-transform: uppercase;
-            color: var(--text-dim);
-            margin-bottom: 4px;
-        }
-
-        /* ── DAY CARDS ── */
-        .days-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-            gap: 10px;
-            flex-shrink: 0;
-        }
-
-        .day-card {
-            background: var(--panel);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 14px 16px;
-            position: relative;
-            overflow: hidden;
-            border-top: 4px solid var(--border);
-            transition: border-top-color 0.3s;
-        }
-        .day-card.normal { border-top-color: var(--normal); }
-        .day-card.caution { border-top-color: var(--caution); }
-        .day-card.critical { border-top-color: var(--critical); }
-
-        .day-card::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-        .day-card.critical::before { background: linear-gradient(135deg, rgba(218,54,51,0.06), transparent); opacity: 1; }
-        .day-card.caution::before { background: linear-gradient(135deg, rgba(255,152,0,0.06), transparent); opacity: 1; }
-        .day-card.normal::before { background: linear-gradient(135deg, rgba(0,200,83,0.04), transparent); opacity: 1; }
-
-        .day-name {
-            font-size: 0.7rem;
-            font-weight: 800;
-            letter-spacing: 3px;
-            text-transform: uppercase;
-            color: var(--text-mid);
-            margin-bottom: 4px;
-        }
-        .day-date {
-            font-size: 0.85rem;
-            font-weight: 700;
-            color: white;
-            margin-bottom: 10px;
-        }
-        .day-status {
-            font-size: 1rem;
-            font-weight: 900;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        .day-card.normal .day-status { color: var(--normal); }
-        .day-card.caution .day-status { color: var(--caution); }
-        .day-card.critical .day-status { color: var(--critical); }
-
-        .day-icons {
-            margin-top: 8px;
-            display: flex;
-            gap: 4px;
-            flex-wrap: wrap;
-        }
-        .day-icon {
-            font-size: 0.65rem;
-            font-weight: 700;
-            padding: 2px 7px;
-            border-radius: 20px;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-        }
-        .icon-storm { background: rgba(218,54,51,0.2); color: #ff6b6b; border: 1px solid rgba(218,54,51,0.3); }
-        .icon-fire { background: rgba(255,152,0,0.2); color: #ffa040; border: 1px solid rgba(255,152,0,0.3); }
-        .icon-flood { background: rgba(0,229,255,0.15); color: var(--cyan); border: 1px solid rgba(0,229,255,0.25); }
-        .icon-winter { background: rgba(100,180,255,0.15); color: #a0c8ff; border: 1px solid rgba(100,180,255,0.25); }
-
-        /* ── HAZARD SUMMARY ── */
-        .hazards-box {
-            background: var(--panel);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 14px 16px;
-            flex: 1;
-            overflow-y: auto;
-        }
-        .hazard-row {
-            display: flex;
-            align-items: flex-start;
-            gap: 10px;
-            padding: 8px 0;
-            border-bottom: 1px solid var(--border);
-        }
-        .hazard-row:last-child { border-bottom: none; }
-        .hazard-icon-dot {
-            width: 8px; height: 8px;
-            border-radius: 50%;
-            background: var(--cyan);
-            margin-top: 5px;
-            flex-shrink: 0;
-        }
-        .hazard-text { font-size: 0.82rem; color: #c9d1d9; line-height: 1.5; }
-        .hazard-label { font-weight: 700; color: white; margin-right: 6px; }
-
-        /* ── LOADING / ERROR ── */
-        .loading-state {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 16px;
-            color: var(--text-dim);
-        }
-        .spinner {
-            width: 28px; height: 28px;
-            border: 3px solid var(--border);
-            border-top-color: var(--cyan);
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .loading-text {
-            font-size: 0.75rem;
-            letter-spacing: 3px;
-            text-transform: uppercase;
-        }
-
-        /* ── FOOTER ── */
-        .footer {
-            padding: 6px 20px;
-            border-top: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-shrink: 0;
-            background: #080b10;
-        }
-        .footer-left { font-size: 0.65rem; color: var(--text-dim); letter-spacing: 1px; }
-        .footer-right a {
-            font-size: 0.65rem;
-            color: var(--text-dim);
-            text-decoration: none;
-            letter-spacing: 1px;
-        }
-        .footer-right a:hover { color: var(--cyan); }
-
-        /* corner accents on cards */
-        .corner { position: absolute; width: 10px; height: 10px; }
-        .corner.tl { top: 0; left: 0; border-top: 2px solid; border-left: 2px solid; }
-        .corner.br { bottom: 0; right: 0; border-bottom: 2px solid; border-right: 2px solid; }
-        .day-card.normal .corner { border-color: var(--normal); }
-        .day-card.caution .corner { border-color: var(--caution); }
-        .day-card.critical .corner { border-color: var(--critical); }
-        .day-card:not(.normal):not(.caution):not(.critical) .corner { border-color: var(--border); }
+        /* MODAL */
+        #manager { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 95%; max-width: 1400px; background: var(--panel-bg); border: 2px solid var(--border); border-radius: 15px; padding: 30px; display: none; z-index: 3000000; box-shadow: 0 0 150px rgba(0,0,0,1); max-height: 85vh; overflow-y: auto; }
+        #modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); display:none; z-index: 2500000; }
+        .tab-bar { display: flex; gap: 5px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+        .tab-btn { background: transparent; border: none; color: #8b949e; padding: 12px 25px; font-weight: bold; cursor: pointer; }
+        .tab-btn.active { background: var(--nws-blue); color: white; border-radius: 8px 8px 0 0; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
+        th { text-align: left; color: #8b949e; font-size: 0.75rem; padding: 12px; text-transform: uppercase; }
+        td { padding: 8px 12px; border-bottom: 1px solid #21262d; }
+        select, input { background: #161b22 !important; color: #ffffff !important; border: 1px solid var(--border); padding: 10px; border-radius: 6px; }
+        .edit-input { width: 100%; border: 1px solid #30363d; font-size: 0.85rem; padding: 5px !important; }
+        .read-only-text { color: var(--warning); font-weight: bold; font-size: 0.85rem; }
     </style>
 </head>
-<body>
+<body onclick="initAudio()">
 
-    <div class="header">
-        <div class="header-left">
-            <img src="https://water.noaa.gov/assets/styles/public/images/noaa-logo.svg" alt="NOAA">
-            <img src="https://water.noaa.gov/assets/styles/public/images/nws-logo.svg" alt="NWS">
-            <div class="header-title">
-                CWD Outlook
-                <span>NCO · NCEP Central Operations</span>
+    <div id="progress-container"><div id="progress-bar"></div></div>
+    <div style="position:fixed; top:6px; right:12px; font-size:0.6rem; color:rgba(255,255,255,0.25); letter-spacing:1px; z-index:9999999; pointer-events:none; font-family:monospace;">BUILD: 2026-05-17 17:29 UTC</div>
+    <div id="modal-overlay" onclick="toggleManager()"></div>
+
+    <div id="task-alert-overlay">
+        <div id="alert-top-label" style="font-size:1rem; letter-spacing:5px; font-weight:900; color:rgba(255,255,255,0.8); text-transform:uppercase; margin-bottom:8px;">OPERATIONAL NOTIFICATION</div>
+        <h2 id="task-alert-text" style="font-size:3.8rem; font-weight:900; text-transform:uppercase; text-shadow:0 0 40px black; text-align:center; color:white; padding:0 20px; margin:0;">ALERT</h2>
+        <div id="alert-cwd-rows" style="display:none; flex-direction:column; align-items:center; gap:6px; margin-top:10px;"></div>
+    </div>
+
+    <div id="content-area"></div>
+    <div id="current-label">STANDBY</div>
+    <div id="restore-tab" onclick="toggleCollapse()">▲ OPS HUB</div>
+
+    <div id="hud-slider">
+        <div id="hud">
+            <div class="collapse-btn" onclick="toggleCollapse()" title="Minimize Controls">▼</div>
+            <button class="icon-btn" onclick="openCurrentSource()" title="Open Source Tab">
+                <svg viewBox="0 0 24 24"><path d="M14,3V5H17.59L7.76,14.83L9.17,16.24L19,6.41V10H21V3M19,19H5V5H12V3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V12H19V19Z" /></svg>
+            </button>
+            <button class="icon-btn" onclick="toggleManager()" title="Settings">
+                <svg viewBox="0 0 24 24"><path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,5.86C16.04,5.46 15.47,5.13 14.86,4.89L14.5,2.23C14.46,2 14.25,1.81 14,1.81H10C9.75,1.81 9.54,2 9.5,2.23L9.14,4.89C8.53,5.13 7.96,5.46 7.44,5.86L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.04 4.95,18.95L7.44,18.14C7.96,18.54 8.53,18.87 9.14,19.11L9.5,21.77C9.54,22 9.75,22.19 10,22.19H14C14.25,22.19 14.46,22 14.5,21.77L14.86,19.11C15.47,18.87 16.04,18.54 16.56,18.14L19.05,18.95C19.27,19.04 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/></svg>
+            </button>
+            <div id="heartbeat"></div>
+            <button class="btn" onclick="prev()">PREV</button>
+            <button class="btn" onclick="togglePause()" id="pause-btn">PAUSE</button>
+            <button class="btn" onclick="next()">NEXT</button>
+            <button class="btn" onclick="quickUpdateLink()" style="color: var(--warning); border-color: var(--warning);">PAGE UPDATE</button>
+            <button class="btn" onclick="hardRefreshCurrent()" style="color: var(--z-cyan); border-color: var(--z-cyan);">HARD REFRESH</button>
+        </div>
+    </div>
+
+    <div id="manager">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h1 style="margin:0; font-size:1.6rem;">NWC OPS Manager</h1>
+            <div id="debug-clock" style="font-size: 1rem; color: var(--z-cyan); font-family: monospace; font-weight:bold;">Local PC Clock Engaged</div>
+            <button class="btn" onclick="toggleManager()" style="background:var(--nws-blue); padding: 12px 45px;">SAVE & CLOSE</button>
+        </div>
+        <div class="tab-bar">
+            <button class="tab-btn active" onclick="switchTab('rotator', this)">ROTATOR</button>
+            <button class="tab-btn" onclick="switchTab('scheduler', this)">SCHEDULER</button>
+            <button class="tab-btn" onclick="switchTab('cwd', this)" style="color:#00e5ff;">NCO CWD</button>
+        </div>
+        <div id="tab-rotator" class="tab-content active">
+            <table><thead><tr><th style="width:40px;">Vis</th><th>Name</th><th>URL</th><th style="width:80px;">Dur(s)</th><th style="width:80px;">Ref(m)</th><th>Action</th></tr></thead><tbody id="site-list"></tbody></table>
+            <div style="background:rgba(255,255,255,0.03); padding:20px; border-radius:12px; display:flex; gap:10px;">
+                <input type="text" id="new-name" placeholder="Name" style="flex:1;"><input type="text" id="new-url" placeholder="URL" style="flex:2;">
+                <input type="number" id="new-duration" value="25" style="width:70px;"><input type="number" id="new-refresh" value="0" style="width:70px;">
+                <button class="btn" onclick="addSite()" style="background:var(--nws-blue);">ADD SITE</button>
             </div>
         </div>
-        <div class="header-right">
-            <div class="updated-text" id="updated-text">--</div>
-            <div class="sync-badge">
-                <div class="sync-dot fetching" id="sync-dot"></div>
-                <span id="sync-text">SYNCING</span>
-            </div>
-        </div>
-    </div>
-
-    <div class="status-bar">
-        <div class="status-label">Current Status:</div>
-        <div class="status-value" id="current-status">—</div>
-        <div class="outlook-text" id="outlook-text">Fetching outlook from NCO...</div>
-    </div>
-
-    <div class="main" id="main-content">
-        <div class="loading-state" id="loading-state">
-            <div class="spinner"></div>
-            <div class="loading-text">Fetching CWD Data</div>
-        </div>
-    </div>
-
-    <div class="footer">
-        <div class="footer-left">AUTO-REFRESHES DAILY · DATA VIA NCO/NCEP</div>
-        <div class="footer-right">
-            <a href="https://www.nco.ncep.noaa.gov/status/cwd/" target="_blank">SOURCE: nco.ncep.noaa.gov →</a>
-        </div>
-    </div>
-
-<script>
-const STATUS_JSON_URL = 'https://glen104.github.io/nwc-status/status.json';
-const REFRESH_MS = 30 * 60 * 1000; // 30 minutes
-let lastFetchDate = null;
-
-function statusClass(s) {
-    if (!s) return '';
-    const u = s.toUpperCase();
-    if (u.includes('CRITICAL') || u.includes('CWD')) return 'critical';
-    if (u.includes('CAUTION') || u.includes('ECE')) return 'caution';
-    if (u.includes('NORMAL')) return 'normal';
-    return '';
-}
-
-function statusLabel(s) {
-    if (!s) return '—';
-    const u = s.toUpperCase();
-    if (u.includes('CRITICAL') || u.includes('CWD')) return 'CRITICAL WEATHER DAY';
-    if (u.includes('CAUTION') || u.includes('ECE')) return 'ENHANCED CAUTION';
-    if (u.includes('NORMAL')) return 'NORMAL';
-    return s.toUpperCase();
-}
-
-function setSyncState(state) {
-    const dot = document.getElementById('sync-dot');
-    const txt = document.getElementById('sync-text');
-    dot.className = 'sync-dot ' + state;
-    txt.innerText = state === 'live' ? 'LIVE' : state === 'fetching' ? 'SYNCING' : 'ERROR';
-}
-
-function buildDayCard(day) {
-    const cls = statusClass(day.status);
-    const icons = (day.hazards || []).map(h => {
-        return '<img src="https://www.nco.ncep.noaa.gov/status/css/images/icon-' + h + '.png" style="width:28px;height:28px;vertical-align:middle;" alt="' + h + '">';
-    }).join(' ');
-
-    return `
-        <div class="day-card ${cls}">
-            <div class="corner tl"></div>
-            <div class="corner br"></div>
-            <div class="day-name">${day.weekday || ''}</div>
-            <div class="day-date">${day.date || ''}</div>
-            <div class="day-status">${statusLabel(day.status)}</div>
-            <div class="day-icons">${icons}</div>
-        </div>`;
-}
-
-function buildHazardRow(text) {
-    return `<div class="hazard-row">
-        <div class="hazard-icon-dot"></div>
-        <div class="hazard-text">${text}</div>
-    </div>`;
-}
-
-function renderData(data) {
-    // Current status — status.json uses 'status' not 'currentStatus'
-    const currentStatus = data.status || data.currentStatus || 'NORMAL';
-    const csEl = document.getElementById('current-status');
-    const cls = statusClass(currentStatus);
-    csEl.className = 'status-value ' + cls;
-    csEl.innerText = statusLabel(currentStatus);
-
-    // Outlook text
-    document.getElementById('outlook-text').innerText = data.outlookText || '';
-
-    // Build day cards + hazards
-    const main = document.getElementById('main-content');
-    const days = data.days || [];
-    const hazards = data.hazardSummary || [];
-
-    let html = '';
-
-    if (days.length) {
-        html += '<div class="section-title">Day-by-Day Outlook</div>';
-        html += '<div class="days-grid">';
-        days.forEach(d => { html += buildDayCard(d); });
-        html += '</div>';
-    }
-
-    if (hazards.length) {
-        html += '<div class="section-title" style="margin-top:4px;">Active Hazards</div>';
-        html += '<div class="hazards-box">';
-        hazards.forEach(h => { html += buildHazardRow(h); });
-        html += '</div>';
-    }
-
-    main.innerHTML = html || '<div class="loading-state"><div class="loading-text">No outlook data available</div></div>';
-
-    // Updated timestamp
-    const now = new Date();
-    document.getElementById('updated-text').innerText = 
-        'Updated ' + now.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'}) + 
-        ' · ' + now.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
-
-    setSyncState('live');
-    lastFetchDate = now.toDateString();
-}
-
-async function fetchCWDOutlook() {
-    setSyncState('fetching');
-    try {
-        const resp = await fetch(STATUS_JSON_URL + '?cb=' + Date.now());
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        const data = await resp.json();
-        renderData(data);
-    } catch(e) {
-        console.error('CWD fetch failed:', e);
-        setSyncState('error');
-        document.getElementById('updated-text').innerText = 'Fetch failed — retrying';
-        document.getElementById('main-content').innerHTML = `
-            <div class="loading-state">
-                <div class="loading-text" style="color:#da3633;">Fetch Error</div>
-                <div style="font-size:0.75rem; color:#586069; text-align:center; margin-top:8px;">
-                    Could not load status.json<br>
-                    <a href="https://www.nco.ncep.noaa.gov/status/cwd/" target="_blank"
-                       style="color:#00e5ff; text-decoration:none; letter-spacing:1px;">
-                        → Open NCO CWD Page Directly
-                    </a>
+        <div id="tab-cwd" class="tab-content">
+            <div style="background:rgba(0,229,255,0.05); border:1px solid rgba(0,229,255,0.2); border-radius:10px; padding:16px 20px; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; gap:12px;">
+                <div style="font-size:1.1rem; font-weight:900; color:#00e5ff; letter-spacing:3px; text-transform:uppercase;">⚡ Live NCO CWD Status</div>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn" onclick="fetchCWDStatus()" style="color:#00e5ff; border-color:#00e5ff; font-size:0.9rem; padding:10px 22px;">↻ REFRESH NOW</button>
+                    <button class="btn" onclick="testCWDAlert()" style="color:#ffca28; border-color:#ffca28; font-size:0.9rem; padding:10px 22px;">⚠ TEST ALERT</button>
+                    <button class="btn" id="cwd-mute-btn" onclick="toggleCWDMute()" style="color:#8b949e; border-color:#8b949e; font-size:0.9rem; padding:10px 22px;">🔔 ALERTS ON</button>
                 </div>
-            </div>`;
-    }
-}
+            </div>
+            <div id="cwd-status-panel" style="background:rgba(255,255,255,0.02); border:1px solid #21262d; border-radius:8px; padding:20px; min-height:80px;">
+                <div style="color:#586069; font-size:1rem; letter-spacing:2px;">LOADING CWD DATA...</div>
+            </div>
+        </div>
 
-// Only re-fetch if it's a new day OR first load
-function checkAndFetch() {
-    const today = new Date().toDateString();
-    if (lastFetchDate !== today) {
-        fetchCWDOutlook();
-    }
-}
+        <div id="tab-scheduler" class="tab-content">
+            <div style="background:rgba(255,202,40,0.1); padding:20px; border-radius:12px; margin-bottom:20px; display:flex; align-items:center; gap:15px; border:1px solid var(--warning);">
+                <span style="font-weight:bold; color:var(--warning);">Alarm Tone:</span>
+                <select id="global-sound-select" onchange="updateGlobalSound(this.value)" style="flex:1;">
+                    <option value="Taco Bell Bong">Taco Bell Bong</option><option value="Submarine Horn">Submarine Horn</option><option value="Air Horn Blast">Air Horn Blast</option><option value="Triple Beep">Triple Beep Pulse</option><option value="None">Silent</option>
+                </select>
+                <button class="btn" onclick="playSelectedTone()" style="background: var(--success); border:none;">TEST SOUND</button>
+                <button class="btn" onclick="triggerAlert('OPERATIONAL ALERT TEST')" style="background: var(--danger); border:none;">TEST POP-UP</button>
+            </div>
+            <table><thead><tr><th>Time</th><th>Message</th><th>Type</th><th>Status</th><th>Action</th></tr></thead><tbody id="task-list"></tbody></table>
+            <div style="background:rgba(255,255,255,0.03); padding:20px; border-radius:12px; display:flex; gap:10px; align-items:center;">
+                <input type="time" id="task-time" value="07:00">
+                <input type="text" id="task-desc" placeholder="Message..." style="flex:1;" onkeydown="if(event.key==='Enter') addTask()">
+                <select id="task-type" onchange="toggleTaskDates()"><option value="daily">Daily</option><option value="weekday">Weekday</option><option value="seasonal">Seasonal</option></select>
+                <div id="task-date-inputs" style="display:none; gap:5px;"><input type="text" id="task-start" placeholder="MM-DD" style="width:70px;"> to <input type="text" id="task-end" placeholder="MM-DD" style="width:70px;"></div>
+                <button class="btn" onclick="addTask()" style="background: var(--nws-blue);">ADD ALERT</button>
+            </div>
+        </div>
+    </div>
 
-// Initial fetch
-fetchCWDOutlook();
+    <script>
+        var audioCtx = null, currentIndex = -1, timeLeft = 0, isPaused = false, lastSyncKey = "", firedTasks = {}, isCollapsed = false, cwdData = null, cwdAlertsMuted = false;
+        var lastCWDSignature = localStorage.getItem('cwd_last_sig') || null;
+        var STORAGE_KEY = 'ROT_OPS_MASTER';
 
-// Check hourly — will only actually re-fetch on a new calendar day
-setInterval(checkAndFetch, REFRESH_MS);
-</script>
-    <div style="position:fixed;bottom:6px;right:10px;font-size:0.6rem;color:rgba(255,255,255,0.2);font-family:monospace;pointer-events:none;">BUILD: 2026-05-17 17:20 UTC</div>
+        var defaultSites = [{id:100,name:"Flood Hazard Outlook",url:"https://www.weather.gov/images/owp/FHO/National/National_FHO.png",duration:10,refresh:0,lastSyncSlot:-1,visible:true,locked:true,pendingScheduledSync:false},{id:101,name:"OWP TimeZone",url:"https://glen104.github.io/owp-time-zone/",duration:20,refresh:0,lastSyncSlot:-1,visible:true},{id:102,name:"NWPS Dark",url:"https://water.noaa.gov/#@=-96.401081,38.1465724,4.1722463&b=dark&g=obsFcst,1!1!1!0!0!0!1!0!0!0!1!1!1!0!0!0!0!0!0!0,0.5,1!1!1!1!0,0,0,true&ab=0,0,#D94B4A,1,1,1,#cccccc,1,0,0,#B243B1,1,0,0,#98E09A,1,false&a=hydrologic,0.35,true&s=0,0,0.9,0.9,false&n=false,#72afe9,0.9,0,0.9,0,0.9,true&p=false,0.75,0,7,0,1,2026,5,15,0,true&d=0,0,1,1,1,1,1,1,#006EFF,1,#006EFF,1,#006EFF,false&q=",duration:30,refresh:0,lastSyncSlot:-1,visible:true},{id:103,name:"CONUS RADAR",url:"https://viewer.weather.noaa.gov/general#layers=42909+40090+40091+40801+42887+41709+41708+40658+40674+41707+41352&x=-95.1435&y=40.07899&z=8.5&panel=layer&ts=41352&tst=1778861439",duration:25,refresh:0,lastSyncSlot:-1,visible:true},{id:104,name:"Hawaii RADAR",url:"https://viewer.weather.noaa.gov/general#layers=42909+40090+40091+41709+41708+40658+40674+41707+41360&x=-157.06189&y=20.51151&z=13&panel=layer&ts=41360&tst=1778860019",duration:25,refresh:0,lastSyncSlot:-1,visible:true},{id:105,name:"Alaska RADAR",url:"https://viewer.weather.noaa.gov/general#layers=42909+40090+40091+41709+41708+40658+40674+41707+41356&x=-145.69625&y=63.60013&z=8&panel=layer&ts=41356&tst=1778864335",duration:25,refresh:0,lastSyncSlot:-1,visible:true},{id:106,name:"Puerto Rico RADAR",url:"https://viewer.weather.noaa.gov/general#layers=42909+40090+40091+41709+41708+40658+40674+41707+41364&x=-66.41067&y=18.43518&z=15&panel=layer&ts=41364&tst=1778857495",duration:25,refresh:0,lastSyncSlot:-1,visible:true},{id:107,name:"Guam RADAR",url:"https://viewer.weather.noaa.gov/general#layers=42909+40090+40091+41709+41708+40658+40674+41707+41369&x=145.76855&y=14.43013&z=14.7&panel=layer&ts=41369&tst=1778864698&location=144.77763,13.44356",duration:25,refresh:0,lastSyncSlot:-1,visible:true}];
+        var defaultTasks = [{id:1,time:"06:55",desc:"MORNING FHO DUE SOON",type:"daily"},{id:2,time:"14:55",desc:"AFTERNOON FHO DUE SOON",type:"daily"},{id:3,time:"07:55",desc:"WPC CALL IN 5 MINUTES",type:"daily"},{id:4,time:"08:50",desc:"WPOD HUDDLE IN 5 MINUTES",type:"weekday"},{id:5,time:"11:40",desc:"DAILY TROPICAL CALL",type:"seasonal",start:"05-15",end:"10-31"}];
+
+        var sites = JSON.parse(localStorage.getItem(STORAGE_KEY+'_SITES')) || defaultSites;
+        var tasks = JSON.parse(localStorage.getItem(STORAGE_KEY+'_TASKS')) || defaultTasks;
+        var globalTone = localStorage.getItem(STORAGE_KEY+'_SOUND') || "Taco Bell Bong";
+
+        function initAudio() { if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); if(audioCtx.state === 'suspended') audioCtx.resume(); }
+
+        function playSelectedTone() {
+            initAudio(); if(globalTone === "None" || !audioCtx) return;
+            var now = audioCtx.currentTime, gain = audioCtx.createGain(); gain.connect(audioCtx.destination);
+            gain.gain.setValueAtTime(0, now); gain.gain.linearRampToValueAtTime(1.15, now + 0.01);
+            if(globalTone === "Taco Bell Bong") { [155, 311, 466, 622].forEach(f=>{const o=audioCtx.createOscillator();o.type='triangle';o.frequency.setValueAtTime(f,now);o.connect(gain);o.start();o.stop(now+3);}); gain.gain.exponentialRampToValueAtTime(0.0001,now+3); }
+            else if(globalTone === "Submarine Horn") { var o = audioCtx.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(100,now); o.connect(gain); o.start(); o.stop(now+2.5); gain.gain.exponentialRampToValueAtTime(0.0001,now+2.5); }
+            else { var o = audioCtx.createOscillator(); o.type = 'square'; o.frequency.setValueAtTime(180,now); o.connect(gain); o.start(); o.stop(now+1.8); gain.gain.exponentialRampToValueAtTime(0.0001,now+1.8); }
+        }
+
+        function toggleCollapse() { 
+            isCollapsed = !isCollapsed; 
+            document.getElementById('hud-slider').className = isCollapsed ? 'collapsed' : ''; 
+            document.body.className = isCollapsed ? 'collapsed-mode' : '';
+        }
+
+        function openCurrentSource() { if (currentIndex !== -1) window.open(sites[currentIndex].url, '_blank'); }
+
+        function quickUpdateLink() {
+            if (currentIndex === -1) return;
+            var target = sites[currentIndex];
+            if (target.id === 100) { alert("System Restriction: Flood Hazard Outlook source is managed by NOAA and cannot be manually swapped."); return; }
+            var newUrl = prompt("PASTE NEW URL FOR: " + target.name, target.url);
+            if (newUrl && newUrl !== target.url) { target.url = newUrl; save(); hardRefreshCurrent(); }
+        }
+
+        function checkOperationalLogic() {
+            var now = new Date();
+            var h=now.getHours(), m=now.getMinutes(), s=now.getSeconds();
+            var timeStr=(h<10?"0"+h:h)+":"+(m<10?"0"+m:m);
+            var dateStr=now.getFullYear()+"-"+(now.getMonth()+1)+"-"+now.getDate();
+            var mmdd=((now.getMonth()+1)<10?"0"+(now.getMonth()+1):(now.getMonth()+1))+"-"+(now.getDate()<10?"0"+now.getDate():now.getDate());
+            
+            if(m===10 && (h+":"+m)!==lastSyncKey && (h===7||h===14||h===15)) { 
+                sites.forEach(site=>{if(site.locked||site.name.includes("Flood"))site.pendingScheduledSync = true;}); lastSyncKey=h+":"+m; 
+            }
+            tasks.forEach(t=>{
+                var fireKey=t.id+"_"+dateStr+"_"+t.time;
+                if(t.time===timeStr && !firedTasks[fireKey]){
+                    if(t.type==='daily'||(t.type==='weekday'&&now.getDay()>=1&&now.getDay()<=5)||(t.type==='seasonal'&&mmdd>=t.start&&mmdd<=t.end)){
+                        triggerAlert(t.desc); firedTasks[fireKey]=true; renderLists();
+                    }
+                }
+            });
+            document.getElementById('debug-clock').innerText = "Clock: "+timeStr+":"+(s<10?"0"+s:s);
+        }
+
+        function triggerAlert(msg) {
+            var overlay = document.getElementById('task-alert-overlay');
+            overlay.classList.remove('cwd-mode');
+            document.getElementById('task-alert-text').innerText = msg;
+            document.getElementById('task-alert-text').style.fontSize = '3.8rem';
+            document.getElementById('alert-top-label').innerText = 'OPERATIONAL NOTIFICATION';
+            document.getElementById('alert-top-label').style.color = 'rgba(255,255,255,0.7)';
+            document.getElementById('alert-cwd-rows').style.display = 'none';
+            document.getElementById('alert-cwd-rows').innerHTML = '';
+            overlay.style.display = 'flex';
+            playSelectedTone();
+            setTimeout(()=>{ overlay.style.display='none'; }, 10000);
+        }
+
+        function triggerCWDAlert(data) {
+            var overlay = document.getElementById('task-alert-overlay');
+            overlay.classList.add('cwd-mode');
+            var today = new Date();
+            var todayDate = today.getDate();
+            var tomorrowDate = new Date(today.getTime() + 86400000).getDate();
+
+            // Header line
+            document.getElementById('task-alert-text').innerText = 'NCO STATUS UPDATE';
+            document.getElementById('alert-top-label').innerText = '⚠ NCO CRITICAL WEATHER DAY ALERT';
+
+            // Build day rows
+            var rowsEl = document.getElementById('alert-cwd-rows');
+            rowsEl.innerHTML = '';
+            (data.days || []).forEach(function(d) {
+                var s = shortStatus(d.status);
+                var icons = hazardIcons(d.hazards);
+                console.log('Day:', d.date, 'Hazards:', JSON.stringify(d.hazards), 'Icons:', icons);
+                var dayNum = parseInt((d.date || '').split(' ').pop());
+                var label = d.weekday + ' ' + d.date;
+                if(dayNum === todayDate) label = 'TODAY';
+                else if(dayNum === tomorrowDate) label = 'TOMORROW';
+                
+                var color = s === 'NORMAL' ? '#00e676' : s === 'CWD' ? '#ff3b3b' : '#ffca28';
+                var row = document.createElement('div');
+                row.style.cssText = 'display:flex; align-items:center; gap:14px; background:rgba(0,0,0,0.3); padding:6px 24px; border-radius:6px; min-width:300px; justify-content:space-between;';
+                row.innerHTML = '<span style="font-size:1.1rem; font-weight:900; color:rgba(255,255,255,0.8); letter-spacing:2px; min-width:100px;">' + label + '</span>' +
+                    '<span style="font-size:1.4rem; font-weight:900; color:' + color + '; letter-spacing:2px;">' + s + '</span>' +
+                    '<span style="font-size:1.4rem;">' + (icons || '—') + '</span>';
+                rowsEl.appendChild(row);
+            });
+
+            rowsEl.style.display = 'flex';
+            document.getElementById('task-alert-overlay').style.display = 'flex';
+            playSelectedTone();
+            setTimeout(()=>{ document.getElementById('task-alert-overlay').style.display='none'; }, 15000);
+        }
+
+        function loadSite(idx, force) {
+            if(sites.filter(s=>s.visible).length===0) return;
+            currentIndex=idx%sites.length;
+            if(!sites[currentIndex].visible){loadSite(currentIndex+1);return;}
+            var target=sites[currentIndex], p=document.getElementById("p-"+target.id);
+            var isImg = target.url.match(/\.(jpeg|jpg|gif|png|webp)$/i) || target.id === 100;
+
+            // Only reload if: user forced (HARD REFRESH), scheduled sync pending,
+            // or refresh interval > 0 AND that interval has elapsed. Never reload just from rotating.
+            var intervalElapsed = target.refresh > 0 && (Math.floor(Date.now() / (target.refresh * 60000)) > target.lastSyncSlot);
+            var shouldReload = force || target.pendingScheduledSync || intervalElapsed;
+
+            if(shouldReload && p) {
+                target.pendingScheduledSync = false;
+                if(isImg) {
+                    var fUrl = target.url + (target.url.indexOf('?') !== -1 ? '&' : '?') + "cb=" + Date.now();
+                    p.style.backgroundImage = "url('" + fUrl + "')";
+                } else {
+                    p.src = 'about:blank';
+                    setTimeout(function(){ p.src = target.url; }, 100);
+                }
+                target.lastSyncSlot = Math.floor(Date.now() / ((target.refresh || 60) * 60000));
+            }
+
+            document.getElementById('current-label').innerText = (target.id === 100) ? "" : target.name;
+            timeLeft = target.duration * 1000;
+            document.querySelectorAll('.site-panel').forEach(pan => pan.classList.remove('active'));
+            if(p) p.classList.add('active');
+        }
+
+        function updateCurrentView() { loadSite(currentIndex); }
+        function hardRefreshCurrent() { loadSite(currentIndex, true); }
+        function save() { localStorage.setItem(STORAGE_KEY+'_SITES',JSON.stringify(sites)); localStorage.setItem(STORAGE_KEY+'_TASKS',JSON.stringify(tasks)); localStorage.setItem(STORAGE_KEY+'_SOUND',globalTone); renderLists(); }
+        
+        function syncFrames() { 
+            var area=document.getElementById('content-area'); 
+            sites.forEach((s,i)=>{
+                setTimeout(()=>{
+                    if(!document.getElementById("p-"+s.id)){
+                        var isImg = s.url.match(/\.(jpeg|jpg|gif|png|webp)$/i) || s.id === 100;
+                        var el=document.createElement(isImg?'div':'iframe');
+                        el.id="p-"+s.id;
+                        el.className='site-panel'+(isImg?' img-panel':'');
+                        if(isImg) el.style.backgroundImage="url("+s.url+")"; else el.src=s.url;
+                        area.appendChild(el);
+                    }
+                },i*250);
+            }); 
+        }
+        
+        function renderLists() {
+            var sl = document.getElementById('site-list'); sl.innerHTML='';
+            sites.forEach((s,i)=>{
+                var nameField = (s.id === 100) ? '<span class="read-only-text">Flood Hazard Outlook</span>' : '<input type="text" class="edit-input" value="'+s.name+'" onchange="sites['+i+'].name=this.value;save()">';
+                var urlField = (s.id === 100) ? '<span class="read-only-text">System Locked (Auto-Image)</span>' : '<input type="text" class="edit-input" value="'+s.url+'" onchange="sites['+i+'].url=this.value;save()">';
+                var actionBtn = (s.id === 100) ? '🔒' : '<button onclick="sites.splice('+i+',1);save()">DEL</button>';
+                sl.innerHTML+='<tr><td><input type="checkbox" '+(s.visible?'checked':'')+' onchange="sites['+i+'].visible=this.checked;save()"></td><td>'+nameField+'</td><td>'+urlField+'</td><td><input type="number" style="width:60px" value="'+s.duration+'" onchange="sites['+i+'].duration=parseInt(this.value);save()"></td><td><input type="number" style="width:60px" value="' + (s.refresh || 0) + '" onchange="sites[' + i + '].refresh=parseInt(this.value);save()"></td><td>'+actionBtn+'</td></tr>';
+            });
+            var tl=document.getElementById('task-list');tl.innerHTML='';
+            var now = new Date(); var dateStr=now.getFullYear()+"-"+(now.getMonth()+1)+"-"+now.getDate();
+            tasks.forEach((t,i)=>{var fireKey=t.id+"_"+dateStr+"_"+t.time;var status=firedTasks[fireKey]?'<span class="status-tag tag-fired">FIRED</span>':'<span class="status-tag tag-pending">PENDING</span>';var range=(t.type==='seasonal')?(t.start+' to '+t.end):'N/A';tl.innerHTML+='<tr><td>'+t.time+'</td><td>'+t.desc+'</td><td>'+t.type+'</td><td>'+status+'</td><td>'+range+'</td><td><button onclick="tasks.splice('+i+','+1+');save()">DEL</button></td></tr>';});
+        }
+
+        function addTask() {
+            var ti=document.getElementById('task-time').value, ds=document.getElementById('task-desc').value, tp=document.getElementById('task-type').value;
+            if(!ds)return; 
+            var newTask = {id:Date.now(),time:ti,desc:ds,type:tp,start:document.getElementById('task-start').value,end:document.getElementById('task-end').value};
+            tasks.push(newTask); save();
+            var now = new Date(); var nowStr=(now.getHours()<10?"0"+now.getHours():now.getHours())+":"+(now.getMinutes()<10?"0"+now.getMinutes():now.getMinutes());
+            if(newTask.time===nowStr)triggerAlert(newTask.desc);
+            document.getElementById('task-desc').value="";
+        }
+        function addSite() { var n=document.getElementById('new-name').value, u=document.getElementById('new-url').value, d=document.getElementById('new-duration').value, r=document.getElementById('new-refresh').value; if(!u)return; sites.push({id:Date.now(),name:n||"New Site",url:u,duration:parseInt(d),refresh:parseInt(r),lastSyncSlot:-1,visible:true}); save(); }
+        function togglePause() { isPaused=!isPaused; const btn=document.getElementById('pause-btn'); btn.innerText=isPaused?"RESUME":"PAUSE"; }
+        function next() { loadSite(currentIndex+1); }
+        function prev() { loadSite(currentIndex-1<0?sites.length-1:currentIndex-1); }
+        function switchTab(id,btn){document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));document.getElementById("tab-"+id).classList.add('active');btn.classList.add('active');}
+        function toggleManager() { var v=document.getElementById('manager').style.display==='block'; document.getElementById('manager').style.display=v?'none':'block'; document.getElementById('modal-overlay').style.display=v?'none':'block'; if(!v)renderLists(); }
+        function updateGlobalSound(v){globalTone=v;save();}
+        function toggleTaskDates(){document.getElementById('task-date-inputs').style.display=document.getElementById('task-type').value==='seasonal'?'flex':'none';}
+        // Progress bar — 100ms for smooth animation
+        setInterval(function() {
+            if(!isPaused && currentIndex !== -1) {
+                timeLeft -= 100;
+                var total = sites[currentIndex].duration * 1000;
+                document.getElementById('progress-bar').style.width = Math.max(0, ((total - timeLeft) / total) * 100) + "%";
+                if(timeLeft <= 0) next();
+            }
+        }, 100);
+
+        // Task/clock logic — 1000ms is plenty
+        setInterval(function() {
+            checkOperationalLogic();
+            // Purge old firedTasks keys to prevent memory growth
+            var today = (function(){ var n=new Date(); return n.getFullYear()+"-"+(n.getMonth()+1)+"-"+n.getDate(); })();
+            Object.keys(firedTasks).forEach(function(k) {
+                if(k.indexOf("_"+today+"_") === -1) delete firedTasks[k];
+            });
+        }, 1000);
+
+        // CWD status fetch — every 30 minutes, compare and alert on change
+        function hazardIcons(hazards) {
+            if(!hazards || !hazards.length) return '';
+            return hazards.map(function(h) {
+                return '<img src="https://www.nco.ncep.noaa.gov/status/css/images/icon-' + h + '.png" style="width:28px; height:28px; vertical-align:middle;" alt="' + h + '">';
+            }).join(' ');
+        }
+
+        function shortStatus(s) {
+            if(!s) return '';
+            var u = s.toUpperCase();
+            if(u.includes('CRITICAL') || u.includes('CWD')) return 'CWD';
+            if(u.includes('CAUTION') || u.includes('ECE')) return 'EC';
+            return 'NORMAL';
+        }
+
+        function fetchCWDStatus() {
+            fetch('https://glen104.github.io/nwc-status/status.json?cb=' + Date.now())
+                .then(function(r){ return r.json(); })
+                .then(function(data) {
+                    // Build a signature from today + tomorrow status + hazards
+                    var today = new Date();
+                    var todayStr = today.toLocaleDateString('en-US', {month:'short', day:'numeric'});
+                    var tomorrowStr = new Date(today.getTime() + 86400000).toLocaleDateString('en-US', {month:'short', day:'numeric'});
+
+                    var todayDay = (data.days || []).find(function(d){ return d.date && d.date.includes(today.getDate()); });
+                    var tomorrowDay = (data.days || []).find(function(d){ return d.date && d.date.includes(new Date(today.getTime()+86400000).getDate()); });
+
+                    var sig = data.status + '|' + 
+                        (todayDay ? todayDay.status + todayDay.hazards.join(',') : '') + '|' +
+                        (tomorrowDay ? tomorrowDay.status + tomorrowDay.hazards.join(',') : '');
+
+                    // Only alert if:
+                    // 1. We have a previous signature to compare against
+                    // 2. The signature actually changed
+                    // 3. The new data has valid days (not an error/empty response)
+                    // 4. The change is meaningful (status or hazards, not just timestamp)
+                    var hasValidDays = data.days && data.days.length > 0;
+                    var hasNonNormalDay = (data.days || []).some(function(d) { return d.status !== 'Normal'; });
+                    
+                    if(lastCWDSignature !== null && sig !== lastCWDSignature && hasValidDays) {
+                        // Only alert when the signature genuinely changed
+                        if(!cwdAlertsMuted) {
+                            triggerCWDAlert(data);
+                        }
+                    }
+                    lastCWDSignature = sig;
+                    try { localStorage.setItem('cwd_last_sig', sig); } catch(e) {}
+                    cwdData = data; // store for test button
+                    
+                    // Update the CWD panel in settings modal
+                    renderCWDPanel(data);
+                })
+                .catch(function(e){ console.log('CWD fetch failed:', e); });
+        }
+
+        function renderCWDPanel(data) {
+            var el = document.getElementById('cwd-status-panel');
+            if(!el) return;
+            var today = new Date();
+            var todayDate = today.getDate();
+            var tomorrowDate = new Date(today.getTime() + 86400000).getDate();
+            var statusColor = data.status === 'NORMAL' ? '#00c853' : data.status.includes('Critical') ? '#da3633' : '#FF9800';
+            var html = '<div style="font-size:0.8rem; color:#586069; letter-spacing:2px; margin-bottom:12px; text-transform:uppercase;">NCO Status · Updated: ' + (data.updated || '--') + '</div>';
+            html += '<div style="font-size:2rem; font-weight:900; margin-bottom:14px; color:' + statusColor + '; letter-spacing:2px;">' + data.status + '</div>';
+            if(data.outlookText) {
+                html += '<div style="font-size:1rem; color:#8b949e; font-style:italic; margin-bottom:18px; line-height:1.6; border-left:3px solid #30363d; padding-left:12px;">' + data.outlookText + '</div>';
+            }
+            (data.days || []).forEach(function(d) {
+                var color = d.status === 'Normal' ? '#00c853' : d.status.includes('Critical') ? '#da3633' : '#FF9800';
+                var icons = hazardIcons(d.hazards);
+                console.log('Day:', d.date, 'Hazards:', JSON.stringify(d.hazards), 'Icons:', icons);
+                var dayNum = parseInt((d.date || '').split(' ').pop());
+                var dayLabel = d.weekday + ' ' + d.date;
+                if(dayNum === todayDate) dayLabel = 'TODAY · ' + d.date;
+                else if(dayNum === tomorrowDate) dayLabel = 'TOMORROW · ' + d.date;
+                html += '<div style="display:flex; align-items:center; gap:16px; padding:12px 0; border-bottom:1px solid #21262d;">';
+                html += '<span style="font-size:1rem; font-weight:700; color:#8b949e; min-width:160px; text-transform:uppercase;">' + dayLabel + '</span>';
+                html += '<span style="font-weight:900; font-size:1.4rem; color:' + color + '; min-width:90px;">' + shortStatus(d.status) + '</span>';
+                html += '<span style="font-size:1.6rem;">' + icons + '</span>';
+                html += '</div>';
+            });
+            el.innerHTML = html;
+        }
+
+        function testCWDAlert() {
+            if(!cwdData) { alert('No CWD data loaded yet — click REFRESH NOW first.'); return; }
+            triggerCWDAlert(cwdData);
+        }
+
+        function toggleCWDMute() {
+            cwdAlertsMuted = !cwdAlertsMuted;
+            var btn = document.getElementById('cwd-mute-btn');
+            if(btn) {
+                btn.innerText = cwdAlertsMuted ? '🔕 ALERTS OFF' : '🔔 ALERTS ON';
+                btn.style.color = cwdAlertsMuted ? '#da3633' : '#8b949e';
+                btn.style.borderColor = cwdAlertsMuted ? '#da3633' : '#8b949e';
+            }
+        }
+
+        // Fetch immediately on load, then schedule to run at :02 and :32 past each hour
+        fetchCWDStatus();
+
+        function scheduleCWDFetch() {
+            var now = new Date();
+            var minutes = now.getMinutes();
+            var seconds = now.getSeconds();
+            // Find next :02 or :32
+            var nextTarget;
+            if(minutes < 2) nextTarget = 2;
+            else if(minutes < 32) nextTarget = 32;
+            else nextTarget = 62; // wraps to :02 next hour
+            var msUntilNext = ((nextTarget - minutes) * 60 - seconds) * 1000;
+            setTimeout(function() {
+                fetchCWDStatus();
+                // After first hit, run every 30 min
+                setInterval(fetchCWDStatus, 1800000);
+            }, msUntilNext);
+        }
+        scheduleCWDFetch();
+
+        syncFrames(); renderLists(); setTimeout(function(){ if(currentIndex===-1) loadSite(0); }, 3000);
+    </script>
 </body>
 </html>
