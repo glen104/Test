@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NWM 3.0 | GFS-TLE Ensemble</title>
+<script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+<style>
+  :root { --bg:#020617; --card:#0f172a; --accent:#38bdf8; --border:#1e293b; --success:#10b981; }
+  * { box-sizing:border-box; }
+  body { background:var(--bg); color:white; font-family:'Segoe UI',sans-serif; margin:0; padding:10px; height:100vh; display:flex; flex-direction:column; }
+
+  .header { display:flex; align-items:center; justify-content:space-between; background:#000; padding:10px 16px; border-radius:8px; border:1px solid #334155; margin-bottom:8px; flex-shrink:0; }
+  .header-left { display:flex; flex-direction:column; gap:2px; }
+  .header-title { font-weight:bold; color:var(--accent); font-size:15px; letter-spacing:0.5px; }
+  .header-sub { font-size:10px; color:#64748b; font-family:monospace; }
+  .controls { display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+
+  select, input[type=text] { background:#1e293b; color:white; border:1px solid #334155; padding:5px 9px; border-radius:4px; font-size:11px; }
+  .btn { cursor:pointer; border-radius:4px; font-weight:bold; padding:6px 14px; font-size:11px; border:1px solid; background:#1e293b; color:white; transition:0.15s; text-transform:uppercase; letter-spacing:0.5px; }
+  .btn:hover { opacity:0.85; }
+  .btn-go { border-color:var(--success); color:var(--success); }
+  .btn-go:hover { background:var(--success); color:#000; }
+  .btn-active { background:#4f46e5 !important; border-color:#6366f1 !important; color:white !important; }
+
+  #status-bar { font-size:10px; color:#64748b; font-family:monospace; padding:4px 8px; background:var(--card); border:1px solid var(--border); border-radius:4px; margin-bottom:6px; flex-shrink:0; min-height:22px; }
+
+  .rid-wrap { display:flex; align-items:center; gap:6px; }
+  .rid-wrap label { font-size:10px; color:#64748b; white-space:nowrap; }
+  #rid-input { width:110px; }
+
+  #cycle-chips { display:flex; gap:4px; flex-wrap:wrap; align-items:center; }
+  .cyc-chip { padding:3px 8px; background:#0f172a; border-radius:4px; font-size:9px; cursor:pointer; border:1px solid #334155; color:#94a3b8; transition:0.15s; }
+  .cyc-chip:hover { border-color:var(--accent); }
+  .cyc-chip.active { background:#312e81; color:#c7d2fe; border-color:#6366f1; }
+  .cyc-chip.newest { border-color:#7c3aed; }
+  .sep { color:#334155; font-size:10px; }
+
+  #chart-wrap { flex:1; display:flex; flex-direction:column; gap:6px; min-height:0; }
+  #plot { flex:1; background:var(--card); border-radius:8px; border:1px solid var(--border); min-height:0; }
+  #dist-panel { border-radius:8px; height:170px; flex-shrink:0; display:none; gap:6px; }
+  #dist-panel.visible { display:flex; }
+  .dist-sub { flex:1; background:var(--card); border-radius:8px; border:1px solid var(--border); min-width:0; }
+
+  #sel-indicator { font-size:9px; color:#fbbf24; font-family:monospace; display:none; padding:2px 6px; background:#1e293b; border-radius:4px; border:1px solid #92400e; }
+
+  #thresh-input { width:100px; background:#1e293b; color:white; border:1px solid #334155; padding:4px 8px; border-radius:4px; font-size:11px; }
+  #thresh-input.active { border-color:#f59e0b; color:#fbbf24; }
+  #thresh-label { font-size:10px; color:#64748b; font-family:monospace; }
+
+  /* expand buttons on dist panels */
+  .dist-wrap { flex:1; position:relative; min-width:0; }
+  .dist-sub { width:100%; height:100%; background:var(--card); border-radius:8px; border:1px solid var(--border); }
+  .expand-btn { position:absolute; top:4px; right:6px; z-index:10; cursor:pointer; background:rgba(15,23,42,0.85); border:1px solid #334155; color:#64748b; border-radius:4px; padding:2px 6px; font-size:10px; line-height:1; transition:0.15s; }
+  .expand-btn:hover { color:var(--accent); border-color:var(--accent); }
+
+  /* modal */
+  #dist-modal { display:none; position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,0.88); backdrop-filter:blur(4px); align-items:center; justify-content:center; }
+  #dist-modal.open { display:flex; }
+  #dist-modal-inner { background:var(--card); border:1px solid var(--accent); border-radius:12px; width:90vw; height:80vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 0 40px rgba(56,189,248,0.15); }
+  #dist-modal-header { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; border-bottom:1px solid var(--border); flex-shrink:0; }
+  #dist-modal-title { font-size:12px; font-weight:bold; color:var(--accent); letter-spacing:0.5px; }
+  #dist-modal-close { cursor:pointer; background:#1e293b; border:1px solid #475569; color:#94a3b8; border-radius:4px; padding:4px 12px; font-size:11px; font-weight:bold; }
+  #dist-modal-close:hover { border-color:#f87171; color:#f87171; }
+  #dist-modal-plot { flex:1; min-height:0; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="header-title">NWM 3.0 · GFS Time-Lagged Ensemble</div>
+    <div class="header-sub" id="reach-label">CONUS · medium_range · ensemble</div>
+  </div>
+  <div class="controls">
+    <div id="cycle-chips"></div>
+    <span class="sep">|</span>
+    <div class="rid-wrap">
+      <label>REACH ID</label>
+      <input type="text" id="rid-input" placeholder="e.g. 3885868">
+    </div>
+    <select id="unit-sel">
+      <option value="cfs">CFS</option>
+      <option value="kcfs">KCFS</option>
+      <option value="cms">CMS</option>
+    </select>
+    <select id="tz-sel">
+      <option value="UTC" data-abbr="UTC">Zulu (UTC)</option>
+      <option value="America/New_York" data-abbr="ET">Eastern (ET)</option>
+      <option value="America/Chicago" data-abbr="CT" selected>Central (CT)</option>
+      <option value="America/Denver" data-abbr="MT">Mountain (MT)</option>
+      <option value="America/Phoenix" data-abbr="MST">Arizona (MST)</option>
+      <option value="America/Los_Angeles" data-abbr="PT">Pacific (PT)</option>
+      <option value="America/Anchorage" data-abbr="AKT">Alaska (AKT)</option>
+    </select>
+    <span id="sel-indicator">▣ TIME FILTER ACTIVE</span>
+    <span id="thresh-wrap" style="display:none; align-items:center; gap:5px;">
+      <label style="font-size:10px;color:#64748b;white-space:nowrap;">PEAK &lt;</label>
+      <input type="text" id="thresh-input" placeholder="value" style="width:72px;">
+      <button class="btn" style="padding:5px 10px;border-color:#f59e0b;color:#f59e0b;" onclick="applyThresh()">SET</button>
+      <button class="btn" style="padding:5px 10px;border-color:#475569;color:#94a3b8;" onclick="clearThresh()">✕</button>
+      <span id="thresh-label" style="font-size:9px;color:#f59e0b;font-family:monospace;white-space:nowrap;"></span>
+    </span>
+    <button class="btn" id="btn-dist" onclick="toggleDist()">PEAK DIST</button>
+    <button class="btn btn-go" onclick="doLoad()">PLOT</button>
+  </div>
+</div>
+
+<div id="status-bar">Initializing...</div>
+<div id="chart-wrap">
+  <div id="plot"></div>
+  <div id="dist-panel">
+    <div class="dist-wrap">
+      <div id="dist-time" class="dist-sub"></div>
+      <button class="expand-btn" onclick="openModal('time')" title="Expand">⤢</button>
+    </div>
+    <div class="dist-wrap">
+      <div id="dist-mag" class="dist-sub"></div>
+      <button class="expand-btn" onclick="openModal('mag')" title="Expand">⤢</button>
+    </div>
+  </div>
+
+  <!-- modal -->
+  <div id="dist-modal">
+    <div id="dist-modal-inner">
+      <div id="dist-modal-header">
+        <span id="dist-modal-title">PEAK DISTRIBUTION</span>
+        <button id="dist-modal-close" onclick="closeModal()">✕ CLOSE</button>
+      </div>
+      <div id="dist-modal-plot"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const WRDS = "https://owpal-wrds.nwc.nws.noaa.gov/api/nwm3.0/v3.0/streamflow";
+const TEST_RID = "23963021";
+
+const MEM_COLORS = { 1:'#ef4444', 2:'#D500F9', 3:'#CE93D8', 4:'#AA00FF', 5:'#9C27B0', 6:'#6A1B9A' };
+const ALL_CYCLES = ['00','06','12','18'];
+
+let dataStore = {};
+let availCycles = [];
+let anDist = false;
+let thresholdFilter = null;   // exclude peaks BELOW this value
+let timeWindow = null;          // {t0, t1} ms timestamps — null = no filter
+const excludedPeaks = new Set();
+
+// ── Utilities ────────────────────────────────────────────────────────────────
+function getRidFromURL() {
+  const s = window.location.search;
+  if (!s) return null;
+  const raw = s.replace('?','').split('&')[0];
+  return /^\d+$/.test(raw) ? raw : null;
+}
+function setStatus(msg, color='#64748b') {
+  const el = document.getElementById('status-bar');
+  el.style.color = color; el.textContent = msg;
+}
+function getUnit() { return document.getElementById('unit-sel').value; }
+function getTZ() {
+  const sel = document.getElementById('tz-sel');
+  return { tz: sel.value, abbr: sel.options[sel.selectedIndex].getAttribute('data-abbr') };
+}
+function todayStr() {
+  const d = new Date();
+  return d.getUTCFullYear()+String(d.getUTCMonth()+1).padStart(2,'0')+String(d.getUTCDate()).padStart(2,'0');
+}
+function yesterdayStr() {
+  const d = new Date(Date.now()-86400000);
+  return d.getUTCFullYear()+String(d.getUTCMonth()+1).padStart(2,'0')+String(d.getUTCDate()).padStart(2,'0');
+}
+
+// ── Cycle discovery ──────────────────────────────────────────────────────────
+async function probeCycle(dateStr, cyc) {
+  const url = `${WRDS}/medium_range/streamflow/nwm_feature_id/${TEST_RID}/?reference_time=${dateStr}T${cyc}Z&forecast_type=ensemble`;
+  try {
+    const r = await fetch(url, {signal: AbortSignal.timeout(6000)});
+    if (!r.ok) return false;
+    const j = await r.json();
+    return (j.forecasts?.length ?? 0) > 0;
+  } catch { return false; }
+}
+
+async function buildCycleUI() {
+  setStatus('Probing WRDS for available cycles…', '#fbbf24');
+  const today = todayStr(), yest = yesterdayStr();
+  const candidates = [
+    ...ALL_CYCLES.map(c => ({day:'Yesterday', dateStr:yest, cyc:c})),
+    ...ALL_CYCLES.map(c => ({day:'Today',     dateStr:today, cyc:c}))
+  ];
+  const results = await Promise.all(candidates.map(async item => {
+    const ok = await probeCycle(item.dateStr, item.cyc);
+    return ok ? item : null;
+  }));
+  availCycles = results.filter(Boolean);
+
+  const latest = availCycles.slice(-1);
+  const container = document.getElementById('cycle-chips');
+  container.innerHTML = '';
+  if (!latest.length) {
+    container.innerHTML = '<span style="font-size:10px;color:#ef4444;">No cycles found</span>';
+    setStatus('No verified cycles available.', '#ef4444');
+    return;
+  }
+  latest.forEach(item => {
+    const chip = document.createElement('div');
+    chip.className = 'cyc-chip newest active';
+    chip.dataset.key = `${item.day}:${item.dateStr}:${item.cyc}`;
+    chip.title = `${item.day} ${item.dateStr}`;
+    chip.textContent = (item.day === 'Yesterday' ? 'Y-' : '') + item.cyc + 'z';
+    chip.onclick = () => chip.classList.toggle('active');
+    container.appendChild(chip);
+  });
+  setStatus(`Latest cycle: ${latest[0].cyc}z (${latest[0].day}). Hit PLOT.`, '#10b981');
+}
+
+function getSelectedCycles() {
+  return [...document.querySelectorAll('.cyc-chip.active')].map(c => {
+    const [day, dateStr, cyc] = c.dataset.key.split(':');
+    return {day, dateStr, cyc};
+  });
+}
+
+// ── Data fetch ───────────────────────────────────────────────────────────────
+async function fetchCycle(rid, dateStr, cyc, unit) {
+  const url = `${WRDS}/medium_range/streamflow/nwm_feature_id/${rid}/?reference_time=${dateStr}T${cyc}Z&forecast_type=ensemble`;
+  const f = unit === 'cfs' ? 35.3147 : unit === 'kcfs' ? 0.0353147 : 1.0;
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return {};
+    const data = await r.json();
+    const out = {};
+    for (const fc of (data.forecasts || [])) {
+      for (const feat of (fc.features || [])) {
+        const members = feat.members || feat.features || [];
+        for (const mem of members) {
+          const mId = mem.identifier ?? 'det';
+          const label = `M${mId} · ${cyc}z`;
+          out[label] = {
+            member: mId, cyc, dateStr,
+            pts: (mem.data_points || []).map(dp => {
+              const t = dp.time;
+              const iso = t.slice(0,4)+'-'+t.slice(4,6)+'-'+t.slice(6,8)+'T'+t.slice(9);
+              return { x: new Date(iso).getTime(), y: dp.value * f };
+            })
+          };
+        }
+      }
+    }
+    return out;
+  } catch { return {}; }
+}
+
+async function doLoad() {
+  const rid = document.getElementById('rid-input').value.trim();
+  if (!rid) { setStatus('Enter a reach ID.', '#ef4444'); return; }
+  history.replaceState(null,'','?'+rid);
+  document.getElementById('reach-label').textContent = `CONUS · medium_range · ensemble · Reach ${rid}`;
+  document.title = `NWM · ${rid}`;
+  const selected = getSelectedCycles();
+  if (!selected.length) { setStatus('Select at least one cycle.', '#ef4444'); return; }
+  setStatus(`Fetching ${selected.length} cycle(s) for reach ${rid}…`, '#fbbf24');
+  dataStore = {};
+  timeWindow = null;
+  thresholdFilter = null;
+  excludedPeaks.clear();
+  document.getElementById('sel-indicator').style.display = 'none';
+  document.getElementById('thresh-input').value = '';
+  document.getElementById('thresh-input').classList.remove('active');
+  document.getElementById('thresh-label').textContent = '';
+  await Promise.all(selected.map(async ({day, dateStr, cyc}) => {
+    const traces = await fetchCycle(rid, dateStr, cyc, getUnit());
+    Object.assign(dataStore, traces);
+  }));
+  const n = Object.keys(dataStore).length;
+  if (!n) { setStatus('No data returned. Check reach ID.', '#ef4444'); return; }
+  setStatus(`Loaded ${n} member traces for reach ${rid}. Box-select on chart to filter peak window.`, '#10b981');
+  renderPlot();
+}
+
+// ── Main chart ───────────────────────────────────────────────────────────────
+function buildPeakMarkers(modelTraces, tz, abbr, unit) {
+  return modelTraces.map(t => {
+    let pi = 0;
+    t.y.forEach((v, i) => { if (v > t.y[pi]) pi = i; });
+    const px = t.x[pi], py = t.y[pi];
+    const inWindow = !timeWindow || (px.getTime() >= timeWindow.t0 && px.getTime() <= timeWindow.t1);
+    const peakTime = px.toLocaleString('en-US', { timeZone: tz, month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit', hour12:false });
+    return {
+      name: `PK · ${t.name}`,
+      x: [px], y: [py],
+      type: 'scatter', mode: 'markers',
+      marker: {
+        symbol: inWindow ? 'diamond' : 'diamond-open',
+        size: inWindow ? 8 : 7,
+        color: inWindow ? t.line.color : 'rgba(100,116,139,0.4)',
+        line: { color: inWindow ? 'rgba(255,255,255,0.7)' : '#475569', width: inWindow ? 1 : 1.5 }
+      },
+      meta: 'peak_marker',
+      showlegend: false,
+      hovertemplate: `<b>PEAK · ${t.name}</b><br>%{y:.2f} ${unit.toUpperCase()}<br>${peakTime} ${abbr}${inWindow ? '' : '<br>⊘ outside window'}<extra></extra>`
+    };
+  });
+}
+
+function renderPlot() {
+  const unit = getUnit();
+  const {tz, abbr} = getTZ();
+  const plotDiv = document.getElementById('plot');
+
+  const cycleList = [...new Set(Object.values(dataStore).map(d => d.cyc))].sort();
+  const modelTraces = Object.entries(dataStore).map(([label, d]) => {
+    const baseColor = MEM_COLORS[parseInt(d.member)] || '#c4b5fd';
+    const isM1 = parseInt(d.member) === 1;
+    return {
+      name: label,
+      x: d.pts.map(p => new Date(p.x)),
+      y: d.pts.map(p => p.y),
+      type: 'scatter', mode: 'lines',
+      line: { width: isM1 ? 2 : 1.2, color: baseColor },
+      meta: 'model_trace',
+      hovertemplate: `<b>${label}</b><br>%{y:.2f} ${unit.toUpperCase()}<br>%{x}<extra></extra>`
+    };
+  });
+
+  const peakTraces = buildPeakMarkers(modelTraces, tz, abbr, unit);
+
+  // Time-window shading shape
+  const shapes = [];
+  if (timeWindow) {
+    shapes.push({
+      type:'rect', xref:'x', yref:'paper',
+      x0: new Date(timeWindow.t0), x1: new Date(timeWindow.t1),
+      y0:0, y1:1,
+      fillcolor:'rgba(251,191,36,0.07)',
+      line:{ color:'rgba(251,191,36,0.4)', width:1, dash:'dot' }
+    });
+  }
+
+  const allX = modelTraces.flatMap(t => t.x.map(d => d.getTime()));
+  const minX = new Date(Math.min(...allX)), maxX = new Date(Math.max(...allX));
+  const tickvals = [], ticktext = [];
+  for (let d = new Date(minX); d <= maxX; d.setUTCHours(d.getUTCHours()+24)) {
+    const copy = new Date(d);
+    tickvals.push(new Date(copy));
+    const local = copy.toLocaleString('en-US', { timeZone: tz, month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit', hour12:false });
+    ticktext.push(`${local} ${abbr}`);
+  }
+
+  const layout = {
+    paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+    font:{ color:'white', size:10 },
+    dragmode: 'select',
+    selectdirection: 'h',
+    xaxis:{ gridcolor:'#1e293b', tickvals, ticktext, tickfont:{size:9}, automargin:true, type:'date', range:[minX, maxX] },
+    yaxis:{ gridcolor:'#1e293b', title:unit.toUpperCase(), autorange:true, zeroline:false },
+    margin:{ t:16, b:80, l:60, r:20 },
+    legend:{ orientation:'h', y:-0.28, font:{size:9} },
+    hovermode:'closest',
+    shapes,
+    uirevision:'nwm'
+  };
+
+  Plotly.react(plotDiv, [...modelTraces, ...peakTraces], layout);
+
+  // Box-select → time window
+  plotDiv.on('plotly_selected', evt => {
+    if (!evt || !evt.range) { clearTimeWindow(); return; }
+    const [x0, x1] = evt.range.x;
+    timeWindow = { t0: new Date(x0).getTime(), t1: new Date(x1).getTime() };
+    document.getElementById('sel-indicator').style.display = 'inline-block';
+    rebuildPeaks();
+    renderDist();
+  });
+
+  // Double-click to clear
+  plotDiv.on('plotly_deselect', () => { clearTimeWindow(); });
+
+  plotDiv.on('plotly_restyle', () => { rebuildPeaks(); renderDist(); });
+  renderDist();
+}
+
+function clearTimeWindow() {
+  timeWindow = null;
+  document.getElementById('sel-indicator').style.display = 'none';
+  rebuildPeaks();
+  renderDist();
+}
+
+function rebuildPeaks() {
+  const plotDiv = document.getElementById('plot');
+  if (!plotDiv?.data) return;
+  const unit = getUnit();
+  const {tz, abbr} = getTZ();
+  // Remove old peak markers and re-add
+  const toRemove = plotDiv.data.map((d,i) => d.meta === 'peak_marker' ? i : null).filter(x=>x!==null).reverse();
+  if (toRemove.length) Plotly.deleteTraces(plotDiv, toRemove);
+  const vis = plotDiv.data.filter(d => d.meta === 'model_trace' && d.visible !== 'legendonly');
+  if (!vis.length) return;
+  const newPeaks = buildPeakMarkers(vis, tz, abbr, unit);
+
+  // Also update window shape
+  const shapes = [];
+  if (timeWindow) {
+    shapes.push({
+      type:'rect', xref:'x', yref:'paper',
+      x0: new Date(timeWindow.t0), x1: new Date(timeWindow.t1),
+      y0:0, y1:1,
+      fillcolor:'rgba(251,191,36,0.07)',
+      line:{ color:'rgba(251,191,36,0.4)', width:1, dash:'dot' }
+    });
+  }
+  Plotly.addTraces(plotDiv, newPeaks);
+  Plotly.relayout(plotDiv, {shapes});
+}
+
+// ── Peak distribution ────────────────────────────────────────────────────────
+function toggleDist() {
+  anDist = !anDist;
+  document.getElementById('btn-dist').classList.toggle('btn-active', anDist);
+  document.getElementById('dist-panel').classList.toggle('visible', anDist);
+  document.getElementById('thresh-wrap').style.display = anDist ? 'flex' : 'none';
+  if (anDist) renderDist();
+}
+
+function collectPeaks() {
+  const plotDiv = document.getElementById('plot');
+  if (!plotDiv?.data) return [];
+  const vis = plotDiv.data.filter(d => d.meta === 'model_trace' && d.visible !== 'legendonly');
+  return vis.map(t => {
+    // Find peak within time window (if set), else global peak
+    let pi = 0;
+    t.x.forEach((x, i) => {
+      const ts = x.getTime ? x.getTime() : new Date(x).getTime();
+      const inWin = !timeWindow || (ts >= timeWindow.t0 && ts <= timeWindow.t1);
+      if (inWin && t.y[i] > t.y[pi]) pi = i;
+    });
+    const pkTs = (t.x[pi].getTime ? t.x[pi].getTime() : new Date(t.x[pi]).getTime());
+    const inWindow = !timeWindow || (pkTs >= timeWindow.t0 && pkTs <= timeWindow.t1);
+    const cycMatch = t.name.match(/·\s*(\S+z)$/);
+    const manualExcl = excludedPeaks.has(t.name);
+    const belowThresh = thresholdFilter !== null && t.y[pi] < thresholdFilter;
+    return {
+      key: t.name,
+      cyc: cycMatch ? cycMatch[1] : '?',
+      val: t.y[pi],
+      ts: pkTs,           // peak timestamp ms
+      color: t.line.color,
+      excluded: manualExcl || !inWindow || belowThresh,
+      reason: belowThresh ? 'thresh' : (manualExcl ? 'manual' : (!inWindow ? 'window' : null))
+    };
+  });
+}
+
+
+// ── Threshold filter ─────────────────────────────────────────────────────────
+function applyThresh() {
+  const raw = document.getElementById('thresh-input').value.trim();
+  const v = parseFloat(raw);
+  if (isNaN(v)) { clearThresh(); return; }
+  thresholdFilter = v;
+  document.getElementById('thresh-input').classList.add('active');
+  document.getElementById('thresh-label').textContent = `excluding peaks < ${v.toFixed(1)} ${getUnit().toUpperCase()}`;
+  renderDist();
+}
+function clearThresh() {
+  thresholdFilter = null;
+  document.getElementById('thresh-input').value = '';
+  document.getElementById('thresh-input').classList.remove('active');
+  document.getElementById('thresh-label').textContent = '';
+  renderDist();
+}
+
+// ── Modal expand ─────────────────────────────────────────────────────────────
+let modalMode = null; // 'time' | 'mag'
+function openModal(mode) {
+  modalMode = mode;
+  document.getElementById('dist-modal').classList.add('open');
+  renderModalPlot();
+}
+function closeModal() {
+  document.getElementById('dist-modal').classList.remove('open');
+  Plotly.purge(document.getElementById('dist-modal-plot'));
+  modalMode = null;
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+function renderModalPlot() {
+  const div = document.getElementById('dist-modal-plot');
+  if (!modalMode || !div) return;
+  const unit = getUnit();
+  const {tz, abbr} = getTZ();
+  const peaks = collectPeaks();
+  document.getElementById('dist-modal-title').textContent =
+    modalMode === 'time' ? 'PEAK TIMING DISTRIBUTION' : `PEAK MAGNITUDE DISTRIBUTION (${unit.toUpperCase()})`;
+
+  const getP = (arr,q) => { const pos=(arr.length-1)*q, b=Math.floor(pos), r=pos-b; return arr[b+1]!==undefined ? arr[b]+r*(arr[b+1]-arr[b]) : arr[b]; };
+  const included = peaks.filter(p => !p.excluded);
+  const cycCount = {}, cycIdx = {};
+  peaks.forEach(p => { cycCount[p.cyc]=(cycCount[p.cyc]||0)+1; cycIdx[p.cyc]=0; });
+
+  const traces = [];
+  peaks.forEach(p => {
+    const i = cycIdx[p.cyc]++;
+    const n = cycCount[p.cyc];
+    const jy = n > 1 ? (i-(n-1)/2)*0.12 : 0;
+    const excl = p.excluded;
+    const xval = modalMode === 'time' ? new Date(p.ts) : p.val;
+    const hov = modalMode === 'time'
+      ? `<b>${p.key}</b><br>${new Date(p.ts).toLocaleString('en-US',{timeZone:tz,month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})} ${abbr}${excl?'<br>⊘ excluded':'<br>click to exclude'}<extra></extra>`
+      : `<b>${p.key}</b><br>${p.val.toFixed(2)} ${unit.toUpperCase()}${excl?'<br>⊘ excluded':'<br>click to exclude'}<extra></extra>`;
+    traces.push({
+      name: p.key, x:[xval], y:[jy],
+      type:'scatter', mode:'markers', meta:'dist_dot',
+      marker:{
+        symbol: excl?'x':'circle', size: excl?12:10,
+        color: excl?'rgba(100,116,139,0.35)':p.color,
+        line:{color: excl?'#475569':'rgba(255,255,255,0.5)', width: excl?2:1}
+      },
+      showlegend:false, hovertemplate:hov
+    });
+  });
+
+  if (modalMode === 'time') {
+    const incTs = included.map(p=>p.ts).sort((a,b)=>a-b);
+    if (incTs.length >= 2) traces.push({
+      name:'Time dist', x:incTs.map(t=>new Date(t)), y:Array(incTs.length).fill(0),
+      type:'box', orientation:'h', boxmean:true,
+      marker:{color:'rgba(56,189,248,0.15)'}, line:{color:'#38bdf8',width:1.5},
+      fillcolor:'rgba(56,189,248,0.08)', hoverinfo:'skip', showlegend:false
+    });
+    const annotations = [];
+    if (incTs.length >= 1) {
+      const fmt = ms => new Date(ms).toLocaleString('en-US',{timeZone:tz,month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})+' '+abbr;
+      const medTs = getP(incTs,0.5), meanTs = incTs.reduce((a,b)=>a+b,0)/incTs.length;
+      annotations.push(
+        {x:new Date(incTs[0]),             y:0.7,  text:`Early<br>${fmt(incTs[0])}`,          showarrow:false,font:{size:10,color:'#94a3b8'},xanchor:'center'},
+        {x:new Date(incTs[incTs.length-1]),y:0.7,  text:`Late<br>${fmt(incTs[incTs.length-1])}`,showarrow:false,font:{size:10,color:'#f87171'},xanchor:'center'},
+        {x:new Date(medTs),                y:0.7,  text:`Med<br>${fmt(medTs)}`,                showarrow:false,font:{size:10,color:'#38bdf8'},xanchor:'center'},
+        {x:new Date(meanTs),              y:-0.7,  text:`Mean<br>${fmt(meanTs)}`,              showarrow:false,font:{size:10,color:'#fbbf24'},xanchor:'center'}
+      );
+    }
+    Plotly.react(div, traces, {
+      paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+      font:{color:'white',size:11},
+      xaxis:{gridcolor:'#1e293b', type:'date', tickformat:'%-m/%-d %Hz', tickfont:{size:10}, automargin:true, zeroline:false},
+      yaxis:{visible:false, range:[-1,1]},
+      margin:{t:20,b:50,l:20,r:20}, hovermode:'closest', annotations
+    });
+  } else {
+    const incVals = included.map(p=>p.val).sort((a,b)=>a-b);
+    if (incVals.length >= 2) traces.push({
+      name:'Mag dist', x:incVals, y:Array(incVals.length).fill(0),
+      type:'box', orientation:'h', boxmean:true,
+      marker:{color:'rgba(56,189,248,0.15)'}, line:{color:'#38bdf8',width:1.5},
+      fillcolor:'rgba(56,189,248,0.08)', hoverinfo:'skip', showlegend:false
+    });
+    const annotations = [];
+    if (incVals.length >= 1) {
+      const med=getP(incVals,0.5), mean=incVals.reduce((a,b)=>a+b,0)/incVals.length;
+      annotations.push(
+        {x:incVals[0],              y:0.7, text:`Min<br>${incVals[0].toFixed(1)}`,              showarrow:false,font:{size:10,color:'#94a3b8'},xanchor:'center'},
+        {x:incVals[incVals.length-1],y:0.7, text:`Max<br>${incVals[incVals.length-1].toFixed(1)}`,showarrow:false,font:{size:10,color:'#f87171'},xanchor:'center'},
+        {x:med,                     y:0.7, text:`Med<br>${med.toFixed(1)}`,                     showarrow:false,font:{size:10,color:'#38bdf8'},xanchor:'center'},
+        {x:mean,                   y:-0.7, text:`Mean<br>${mean.toFixed(1)}`,                   showarrow:false,font:{size:10,color:'#fbbf24'},xanchor:'center'}
+      );
+    }
+    Plotly.react(div, traces, {
+      paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+      font:{color:'white',size:11},
+      xaxis:{gridcolor:'#1e293b', title:unit.toUpperCase(), zeroline:false, titlefont:{size:11}, automargin:true},
+      yaxis:{visible:false, range:[-1,1]},
+      margin:{t:20,b:50,l:20,r:20}, hovermode:'closest', annotations
+    });
+  }
+
+  div.removeAllListeners && div.removeAllListeners('plotly_click');
+  div.on('plotly_click', evt => {
+    const pt = evt.points[0];
+    if (!pt || pt.data.meta !== 'dist_dot') return;
+    const key = pt.data.name;
+    const pk = peaks.find(p=>p.key===key);
+    if (pk?.reason === 'window') return;
+    if (excludedPeaks.has(key)) excludedPeaks.delete(key);
+    else excludedPeaks.add(key);
+    renderDist();
+    renderModalPlot();
+  });
+}
+
+function renderDist() {
+  const panel = document.getElementById('dist-panel');
+  if (!panel.classList.contains('visible')) return;
+  const unit = getUnit();
+  const {tz, abbr} = getTZ();
+  const peaks = collectPeaks();
+
+  const timeDiv = document.getElementById('dist-time');
+  const magDiv  = document.getElementById('dist-mag');
+
+  // Attach class if not already
+  [timeDiv, magDiv].forEach(d => d.classList.add('dist-sub'));
+
+  if (!peaks.length) {
+    [timeDiv, magDiv].forEach(d => { Plotly.purge(d); d.innerHTML = '<div style="color:#64748b;font-size:10px;padding:8px;">No data.</div>'; });
+    return;
+  }
+
+  const getP = (arr, q) => { const pos=(arr.length-1)*q, b=Math.floor(pos), r=pos-b; return arr[b+1]!==undefined ? arr[b]+r*(arr[b+1]-arr[b]) : arr[b]; };
+  const included = peaks.filter(p => !p.excluded);
+
+  const cycCount = {}, cycIdx = {};
+  peaks.forEach(p => { cycCount[p.cyc] = (cycCount[p.cyc]||0)+1; cycIdx[p.cyc] = 0; });
+
+  function makeClickHandler(div, xKey) {
+    div.removeAllListeners && div.removeAllListeners('plotly_click');
+    div.on('plotly_click', evt => {
+      const pt = evt.points[0];
+      if (!pt || pt.data.meta !== 'dist_dot') return;
+      const key = pt.data.name;
+      const pk = peaks.find(p => p.key === key);
+      if (pk?.reason === 'window') return;
+      if (excludedPeaks.has(key)) excludedPeaks.delete(key);
+      else excludedPeaks.add(key);
+      renderDist();
+    });
+  }
+
+  function buildDotTraces(xKey) {
+    // reset cycle index for each call
+    Object.keys(cycIdx).forEach(k => cycIdx[k] = 0);
+    const traces = [];
+    peaks.forEach(p => {
+      const i = cycIdx[p.cyc]++;
+      const n = cycCount[p.cyc];
+      const jy = n > 1 ? (i-(n-1)/2)*0.09 : 0;
+      const excl = p.excluded;
+      const xval = xKey === 'ts' ? new Date(p.ts) : p.val;
+      const label = excl
+        ? (p.reason === 'window' ? '⊘ outside window' : p.reason === 'thresh' ? `⊘ below ${thresholdFilter} ${unit.toUpperCase()}` : '⊘ excluded — click to restore')
+        : 'click to exclude';
+      const hov = xKey === 'ts'
+        ? `<b>${p.key}</b><br>Peak time: ${new Date(p.ts).toLocaleString('en-US',{timeZone:tz,month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})} ${abbr}<br>${label}<extra></extra>`
+        : `<b>${p.key}</b><br>Peak: ${p.val.toFixed(2)} ${unit.toUpperCase()}<br>${label}<extra></extra>`;
+      traces.push({
+        name: p.key, x: [xval], y: [jy],
+        type: 'scatter', mode: 'markers', meta: 'dist_dot',
+        marker: {
+          symbol: excl ? 'x' : 'circle', size: excl ? 10 : 9,
+          color: excl ? 'rgba(100,116,139,0.35)' : p.color,
+          line: { color: excl ? '#475569' : 'rgba(255,255,255,0.5)', width: excl ? 2 : 1 }
+        },
+        showlegend: false, hovertemplate: hov
+      });
+    });
+    return traces;
+  }
+
+  const commonLayout = {
+    paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+    font:{color:'white',size:9},
+    yaxis:{ visible:false, range:[-0.9,0.9] },
+    margin:{t:18,b:36,l:10,r:10},
+    hovermode:'closest', uirevision:'dist'
+  };
+
+  // ── TIME panel ─────────────────────────────────────────────────────────────
+  const timeTraces = buildDotTraces('ts');
+  const incTs = included.map(p => p.ts).sort((a,b)=>a-b);
+  const timeAnnotations = [];
+  if (incTs.length >= 1) {
+    const medTs = getP(incTs, 0.5);
+    const meanTs = incTs.reduce((a,b)=>a+b,0)/incTs.length;
+    const fmt = ms => new Date(ms).toLocaleString('en-US',{timeZone:tz,month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})+' '+abbr;
+    timeAnnotations.push(
+      { x:new Date(incTs[0]),             y:0.72, text:`Early<br>${fmt(incTs[0])}`,    showarrow:false, font:{size:8,color:'#94a3b8'}, xanchor:'center' },
+      { x:new Date(incTs[incTs.length-1]),y:0.72, text:`Late<br>${fmt(incTs[incTs.length-1])}`, showarrow:false, font:{size:8,color:'#f87171'}, xanchor:'center' },
+      { x:new Date(medTs),                y:0.72, text:`Med<br>${fmt(medTs)}`,          showarrow:false, font:{size:8,color:'#38bdf8'}, xanchor:'center' },
+      { x:new Date(meanTs),              y:-0.72, text:`Mean<br>${fmt(meanTs)}`,        showarrow:false, font:{size:8,color:'#fbbf24'}, xanchor:'center' }
+    );
+  }
+  if (incTs.length >= 2) {
+    timeTraces.push({
+      name:'Time dist', x:incTs.map(t=>new Date(t)), y:Array(incTs.length).fill(0),
+      type:'box', orientation:'h', boxmean:true,
+      marker:{color:'rgba(56,189,248,0.15)'}, line:{color:'#38bdf8',width:1.5},
+      fillcolor:'rgba(56,189,248,0.08)', hoverinfo:'skip', showlegend:false
+    });
+  }
+  Plotly.react(timeDiv, timeTraces, {
+    ...commonLayout,
+    title:{text:'PEAK TIMING',font:{size:9,color:'#64748b'},x:0.5,xanchor:'center',y:0.98},
+    xaxis:{ gridcolor:'#1e293b', type:'date', zeroline:false,
+            tickformat:'%-m/%-d %Hz', tickfont:{size:8}, titlefont:{size:9}, automargin:true },
+    annotations: timeAnnotations
+  }, {displayModeBar:false});
+  makeClickHandler(timeDiv, 'ts');
+
+  // ── MAGNITUDE panel ────────────────────────────────────────────────────────
+  const magTraces = buildDotTraces('val');
+  const incVals = included.map(p => p.val).sort((a,b)=>a-b);
+  const magAnnotations = [];
+  if (incVals.length >= 1) {
+    const med  = getP(incVals, 0.5);
+    const mean = incVals.reduce((a,b)=>a+b,0)/incVals.length;
+    magAnnotations.push(
+      { x:incVals[0],              y:0.72, text:`Min<br>${incVals[0].toFixed(1)}`,               showarrow:false, font:{size:9,color:'#94a3b8'}, xanchor:'center' },
+      { x:incVals[incVals.length-1],y:0.72, text:`Max<br>${incVals[incVals.length-1].toFixed(1)}`,showarrow:false, font:{size:9,color:'#f87171'}, xanchor:'center' },
+      { x:med,                     y:0.72, text:`Med<br>${med.toFixed(1)}`,                      showarrow:false, font:{size:9,color:'#38bdf8'}, xanchor:'center' },
+      { x:mean,                   y:-0.72, text:`Mean<br>${mean.toFixed(1)}`,                    showarrow:false, font:{size:9,color:'#fbbf24'}, xanchor:'center' }
+    );
+    const nExcl = peaks.filter(p=>p.excluded).length;
+    if (nExcl) magAnnotations.push({ x:incVals[0], y:-0.72, xanchor:'left',
+      text:`n=${incVals.length}/${peaks.length}`, showarrow:false, font:{size:9,color:'#64748b'} });
+  }
+  if (incVals.length >= 2) {
+    magTraces.push({
+      name:'Mag dist', x:incVals, y:Array(incVals.length).fill(0),
+      type:'box', orientation:'h', boxmean:true,
+      marker:{color:'rgba(56,189,248,0.15)'}, line:{color:'#38bdf8',width:1.5},
+      fillcolor:'rgba(56,189,248,0.08)', hoverinfo:'skip', showlegend:false
+    });
+  }
+  Plotly.react(magDiv, magTraces, {
+    ...commonLayout,
+    title:{text:'PEAK MAGNITUDE',font:{size:9,color:'#64748b'},x:0.5,xanchor:'center',y:0.98},
+    xaxis:{ gridcolor:'#1e293b', title:`${unit.toUpperCase()}`, zeroline:false, titlefont:{size:9}, automargin:true },
+    annotations: magAnnotations
+  }, {displayModeBar:false});
+  makeClickHandler(magDiv, 'val');
+}
+
+// ── Unit / TZ reactivity ─────────────────────────────────────────────────────
+document.getElementById('unit-sel').onchange = () => { if (Object.keys(dataStore).length) renderPlot(); };
+document.getElementById('tz-sel').onchange   = () => { if (Object.keys(dataStore).length) renderPlot(); };
+document.getElementById('thresh-input').addEventListener('keydown', e => { if (e.key === 'Enter') applyThresh(); });
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+(async () => {
+  const urlRid = getRidFromURL();
+  if (urlRid) {
+    document.getElementById('rid-input').value = urlRid;
+    document.getElementById('reach-label').textContent = `CONUS · medium_range · ensemble · Reach ${urlRid}`;
+    document.title = `NWM · ${urlRid}`;
+  }
+  await buildCycleUI();
+  if (urlRid) doLoad();
+})();
+</script>
+</body>
+</html>
